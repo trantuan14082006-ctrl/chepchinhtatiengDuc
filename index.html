@@ -58,6 +58,7 @@ h3{font-size:22px;margin:0 0 18px}
 .sbtn{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:9px 14px;font:600 14px system-ui;cursor:pointer;color:var(--tx)}.sbtn.p{background:var(--gr);border-color:var(--gr);color:#fff}
 .seg{display:grid;grid-template-columns:28px 1fr 70px 70px 40px;gap:6px;align-items:center;margin:6px 0}.seg input{padding:6px!important;font-size:14px!important}
 .seg .tt{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wmsel{padding:9px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:14px system-ui;max-width:100%}
 .mu{color:var(--mu);font-size:14px}.hide{display:none!important}.big{font-size:34px;font-weight:700}
 @media(max-width:700px){main{padding:6px 16px 60px}.hd{padding:10px 16px}.ah{padding:16px 20px;font-size:20px}.btn{width:46%}}
 </style>
@@ -110,10 +111,16 @@ h3{font-size:22px;margin:0 0 18px}
  <div class="th"><h1>Thêm bài mới</h1></div>
  <div class="card">
   <label>Sách / giáo trình</label><input type="text" id="book" placeholder="VD: Netzwerk A1">
-  <label>Tên bài</label><input type="text" id="title" placeholder="VD: Kapitel 1 – Track 02">
-  <label>File audio</label><input type="file" id="file" accept="audio/*">
+  <label>File audio <span class="mu">(chọn được nhiều file; có thể kèm file .txt cùng tên làm script, .vi.txt làm bản dịch)</span></label><input type="file" id="file" accept="audio/*,.txt" multiple>
+  <div id="fsum" class="mu"></div>
+  <div id="sTitle"><label>Tên bài</label><input type="text" id="title" placeholder="VD: Kapitel 1 – Track 02"></div>
+  <div id="sBody">
   <label>Script – mỗi câu 1 dòng, hoặc mỗi đoạn cách nhau 1 dòng trống (web tách audio theo số câu/đoạn)</label><textarea id="script" placeholder="Wie geht's?&#10;Gut, danke. Und dir?"></textarea>
   <label>Bản dịch tiếng Việt – mỗi câu 1 dòng, cùng thứ tự (không bắt buộc)</label><textarea id="trans"></textarea>
+  </div>
+  <div id="multi" class="hide"></div>
+  <label style="display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="wchk" checked> Dùng Whisper (nhận diện giọng nói) để tách câu chính xác hơn</label>
+  <label>Mô hình Whisper – lần đầu phải tải về, cần mạng</label><select id="wm" class="wmsel"><option value="tiny">tiny (nhẹ, nhanh)</option><option value="base">base (khuyên dùng)</option><option value="small">small (chính xác nhất, nặng)</option></select>
   <div class="row"><button class="sbtn p" id="save">Lưu & tự tách câu</button><span class="mu" id="msg"></span></div>
  </div>
 </div>
@@ -124,7 +131,7 @@ h3{font-size:22px;margin:0 0 18px}
   <label>Sách / học phần</label><input type="text" id="ebook"><label>Tên bài</label><input type="text" id="etitle">
   <label>Script (mỗi câu 1 dòng)</label><textarea id="escript"></textarea>
   <label>Bản dịch tiếng Việt (mỗi câu 1 dòng)</label><textarea id="etrans"></textarea>
-  <div class="row"><button class="sbtn" id="eauto">Tự tách lại theo số dòng</button><button class="sbtn p" id="esave">Lưu</button><button class="sbtn" id="eback">← Quay lại</button><span class="mu" id="emsg"></span></div>
+  <div class="row"><button class="sbtn" id="eauto">Tự tách lại theo số dòng</button><button class="sbtn p" id="ewh">Tách bằng Whisper</button><select id="wm2" class="wmsel"><option value="tiny">tiny (nhẹ, nhanh)</option><option value="base">base (khuyên dùng)</option><option value="small">small (chính xác nhất, nặng)</option></select><button class="sbtn p" id="esave">Lưu</button><button class="sbtn" id="eback">← Quay lại</button><span class="mu" id="emsg"></span></div>
   <p class="mu">Chỉnh giây bắt đầu/kết thúc từng câu, bấm ▶ để nghe thử.</p><div id="segs"></div>
  </div>
 </div>
@@ -144,7 +151,28 @@ const all=()=>new Promise(r=>{if(!db)return r(mem);try{const q=db.transaction('l
 const put=x=>new Promise(r=>{mem=mem.filter(m=>m.id!==x.id);mem.push(x);if(!db)return r();try{const t=db.transaction('l','readwrite');t.objectStore('l').put(x);t.oncomplete=()=>r();t.onerror=()=>r()}catch(e){r()}});
 const del=id=>new Promise(r=>{mem=mem.filter(x=>x.id!==id);if(!db)return r();try{const t=db.transaction('l','readwrite');t.objectStore('l').delete(id);t.oncomplete=()=>r()}catch(e){r()}});
 /* auto split */
-async function detect(blob,N){
+/* chọn điểm cắt: kết hợp khoảng lặng + độ dài chữ của từng câu (quy hoạch động) */
+function pickCuts(cands,lo,hi,ls){
+  const N=ls.length,W=ls.map(l=>l.replace(/[^\p{L}\p{N}]/gu,'').length+8),tw=W.reduce((a,b)=>a+b,0),tot=hi-lo;
+  const exp=W.map(w=>tot*w/tw);
+  if(N<=1)return [];
+  let c=cands.slice().sort((a,b)=>b.g-a.g).slice(0,400).sort((a,b)=>a.t-b.t);
+  const M=c.length;if(M<N-1)return null;
+  const T=[lo,...c.map(x=>x.t),hi],G=[0,...c.map(x=>Math.min(x.g,1)),0];
+  const LAM=.8,seg=(a,b,k)=>{const d=Math.max(T[b]-T[a],.05),r=Math.log(d/exp[k]);return r*r};
+  const INF=1e18,dp=[],bk=[];
+  for(let k=0;k<N;k++){dp.push(new Float64Array(M+2).fill(INF));bk.push(new Int32Array(M+2).fill(-1))}
+  for(let j=1;j<=M;j++)dp[0][j]=seg(0,j,0)-LAM*G[j];
+  for(let k=1;k<N-1;k++)for(let j=k+1;j<=M;j++){let best=INF,bi=-1;
+    for(let i=k;i<j;i++){if(dp[k-1][i]>=INF)continue;const v=dp[k-1][i]+seg(i,j,k);if(v<best){best=v;bi=i}}
+    if(bi>=0){dp[k][j]=best-LAM*G[j];bk[k][j]=bi}}
+  let best=INF,bj=-1;
+  for(let j=N-1;j<=M;j++){if(dp[N-2][j]>=INF)continue;const v=dp[N-2][j]+seg(j,M+1,N-1);if(v<best){best=v;bj=j}}
+  if(bj<0)return null;
+  const out=[];for(let k=N-2,j=bj;k>=0;k--){out.unshift(T[j]);j=bk[k][j]}
+  return out;
+}
+async function detect(blob,N,ls){
   ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
   const buf=await ctx.decodeAudioData(await blob.arrayBuffer());
   const d=buf.getChannelData(0),fr=Math.floor(buf.sampleRate*.01),nf=Math.floor(d.length/fr),r=new Float32Array(nf);
@@ -152,10 +180,15 @@ async function detect(blob,N){
   const so=Float32Array.from(r).sort(),th=Math.max(so[Math.floor(nf*.95)]*.06,.002),dur=buf.duration;
   let first=0;while(first<nf-1&&r[first]<=th)first++;
   let last=nf-1;while(last>0&&r[last]<=th)last--;
-  const gaps=[];let gs=-1;
-  for(let i=first;i<=last;i++){if(r[i]<=th){if(gs<0)gs=i}else if(gs>=0){if((i-gs)>=8)gaps.push({s:gs*.01,e:i*.01});gs=-1}}
   const lo=Math.max(0,first*.01-.1),hi=Math.min(dur,(last+1)*.01+.2);
-  const cuts=gaps.sort((a,b)=>(b.e-b.s)-(a.e-a.s)).slice(0,N-1).map(g=>(g.s+g.e)/2).sort((a,b)=>a-b);
+  const gapsAt=(t,minF)=>{const g=[];let gs=-1;
+    for(let i=first;i<=last;i++){if(r[i]<=t){if(gs<0)gs=i}else if(gs>=0){if((i-gs)>=minF)g.push({t:(gs+i)/2*.01,g:(i-gs)*.01});gs=-1}}return g};
+  let cands=gapsAt(th,5);
+  if(cands.length<N-1)cands=gapsAt(th*3,3);
+  if(cands.length<N-1)cands=gapsAt(th*8,2);
+  let cuts=null;
+  if(ls&&ls.length===N)cuts=pickCuts(cands,lo,hi,ls);
+  if(!cuts)cuts=cands.sort((a,b)=>b.g-a.g).slice(0,N-1).map(x=>x.t).sort((a,b)=>a-b);
   const b=[lo,...cuts,hi];
   while(b.length-1<N){let m=0;for(let i=1;i<b.length;i++)if(b[i]-b[i-1]>b[m+1]-b[m])m=i-1;b.splice(m+1,0,(b[m]+b[m+1])/2)}
   return b.slice(1).map((e,i)=>[+b[i].toFixed(2),+e.toFixed(2)]);
@@ -213,27 +246,162 @@ $('list').onclick=async e=>{
   if(pl){cur=(await all()).find(x=>x.id==pl.dataset.id);$('mt').textContent=(cur.book?cur.book+' - ':'')+cur.title;show('vMode')}
 };
 const head=()=>(cur.book?cur.book+' - ':'')+cur.title;
-async function ensureSegs(){const n=getLines(cur.script).length;if(!cur.segs||cur.segs.length!==n){cur.segs=await detect(cur.audio,n);await put(cur)}}
+async function ensureSegs(){const n=getLines(cur.script).length;if(!cur.segs||cur.segs.length!==n){cur.segs=await detect(cur.audio,n,getLines(cur.script));await put(cur)}}
 document.querySelector('.col .mode').parentNode.onclick=async e=>{
   const m=e.target.dataset.m;if(!m)return;await ensureSegs();m==='type'?startPractice():startRead()};
 $('mback').onclick=()=>show('vHome');
 $('mdel').onclick=async()=>{if(confirm('Xoá bài này?')){await del(cur.id);await render();show('vHome')}};
 $('medit').onclick=async()=>{await ensureSegs();openEditor()};
-$('save').onclick=async()=>{
-  const t=$('title').value.trim(),s=$('script').value.trim(),f=$('file').files[0];
-  if(!t||!s||!f){$('msg').textContent='Cần đủ tên bài, audio và script.';return}
-  $('msg').textContent='Đang tách audio…';
-  try{const x={id:Date.now(),title:t,book:$('book').value.trim(),script:s,trans:$('trans').value.trim(),audio:f};
-    x.segs=await detect(f,getLines(s).length);await put(x);
-    $('title').value=$('script').value=$('trans').value=$('file').value='';$('msg').textContent='Đã lưu ✓ – vào bài và chọn "Chỉnh mốc" để kiểm tra các câu.';render();
-  }catch(e){$('msg').textContent='Không đọc được file audio này.'}
+let pend=[];
+const isAud=f=>f.type.startsWith('audio/')||/\.(mp3|wav|m4a|ogg|aac|flac|opus|wma)$/i.test(f.name);
+const baseName=n=>n.replace(/\.[^.]+$/,'');
+$('file').onchange=async()=>{
+  const fs=[...$('file').files],nat=(a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true});
+  const au=fs.filter(isAud).sort(nat),tx=fs.filter(f=>/\.txt$/i.test(f.name));
+  const rd=async f=>f?(await f.text()).replace(/^\uFEFF/,'').trim():'';
+  pend=[];
+  for(const a of au){const b=baseName(a.name).toLowerCase();
+    const sf=tx.find(t=>baseName(t.name).toLowerCase()===b),tf=tx.find(t=>baseName(t.name).toLowerCase()===b+'.vi');
+    pend.push({file:a,title:baseName(a.name),script:await rd(sf),trans:await rd(tf)})}
+  const multi=pend.length>1;
+  $('sTitle').classList.toggle('hide',multi);$('sBody').classList.toggle('hide',multi);$('multi').classList.toggle('hide',!multi);
+  $('fsum').textContent=pend.length?`Đã chọn ${pend.length} file audio.`:'';
+  if(multi){
+    $('multi').innerHTML=pend.map((x,i)=>`<div class="card" style="background:var(--bg);border:1px solid var(--bd)" data-i="${i}"><b>${i+1}. ${esc(x.file.name)}</b>
+      <label>Tên bài</label><input type="text" class="mt" value="${esc(x.title)}">
+      <label>Script – mỗi câu 1 dòng</label><textarea class="ms">${esc(x.script)}</textarea>
+      <label>Bản dịch tiếng Việt (không bắt buộc)</label><textarea class="mr">${esc(x.trans)}</textarea></div>`).join('');
+  }else if(pend.length===1){
+    $('title').value=pend[0].title;
+    if(pend[0].script)$('script').value=pend[0].script;
+    if(pend[0].trans)$('trans').value=pend[0].trans;
+  }
 };
+$('save').onclick=async()=>{
+  const book=$('book').value.trim();
+  if(!pend.length){$('msg').textContent='Cần chọn ít nhất 1 file audio.';return}
+  let items;
+  if(pend.length>1){
+    items=[...$('multi').children].map((c,i)=>({file:pend[i].file,title:c.querySelector('.mt').value.trim(),script:c.querySelector('.ms').value.trim(),trans:c.querySelector('.mr').value.trim()}));
+    const bad=items.findIndex(x=>!x.title||!x.script);
+    if(bad>=0){$('msg').textContent=`Bài ${bad+1} thiếu tên bài hoặc script.`;return}
+  }else{
+    items=[{file:pend[0].file,title:$('title').value.trim(),script:$('script').value.trim(),trans:$('trans').value.trim()}];
+    if(!items[0].title||!items[0].script){$('msg').textContent='Cần đủ tên bài, audio và script.';return}
+  }
+  let ok=0,fail=[],notes=new Set(),useW=$('wchk').checked;
+  for(let i=0;i<items.length;i++){const it=items[i],pre=items.length>1?`(${i+1}/${items.length}) `:'';
+    try{const ls=getLines(it.script),[sg,note]=await smartSplit(it.file,ls,m=>{$('msg').textContent=pre+m},useW);
+      if(note)notes.add(note);
+      await put({id:Date.now()+i,title:it.title,book,script:it.script,trans:it.trans,audio:it.file,segs:sg});ok++}
+    catch(e){fail.push(it.file.name)}}
+  if(!fail.length){
+    $('title').value=$('script').value=$('trans').value=$('file').value='';pend=[];
+    $('multi').innerHTML='';$('fsum').textContent='';$('multi').classList.add('hide');$('sTitle').classList.remove('hide');$('sBody').classList.remove('hide');
+    $('msg').textContent=`Đã lưu ${ok} bài ✓ – vào bài và chọn "Chỉnh mốc" để kiểm tra các câu. `+[...notes].join(' ');
+  }else $('msg').textContent=`Đã lưu ${ok} bài. Không đọc được: ${fail.join(', ')}`;
+  render();
+};
+/* ===== Whisper: nhận diện giọng nói trong trình duyệt rồi đối chiếu với script ===== */
+const WM={tiny:'Xenova/whisper-tiny',base:'Xenova/whisper-base',small:'Xenova/whisper-small'};
+let asr=null,asrKey='';
+const wkey=()=>{try{const k=localStorage.getItem('wmodel');return WM[k]?k:'base'}catch(e){return 'base'}};
+const normW=s=>(s||'').toLowerCase().normalize('NFC').replace(/[^\p{L}\p{N}]/gu,'');
+const toks=l=>l.split(/[\s\-–—]+/).map(normW).filter(Boolean);
+function lev(a,b){const n=a.length,m=b.length;let p=Array.from({length:m+1},(_,j)=>j);
+  for(let i=1;i<=n;i++){const c=[i];for(let j=1;j<=m;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[m]}
+function sim(a,b){if(a===b)return 1;const mx=Math.max(a.length,b.length);if(mx<=3)return 0;return 1-lev(a,b)/mx}
+/* ls: các dòng script; words: [{t,s,e}] từ Whisper (t đã chuẩn hoá). Trả về [[start,end]] mỗi dòng hoặc null */
+function alignLines(ls,words,dur){
+  const N=ls.length,S=[],own=[];
+  ls.forEach((l,i)=>toks(l).forEach(t=>{S.push(t);own.push(i)}));
+  const n=S.length,m=words.length;if(!n||!m)return null;
+  const W=m+1,dp=new Float32Array((n+1)*W),bk=new Uint8Array((n+1)*W);
+  for(let i=1;i<=n;i++){dp[i*W]=i;bk[i*W]=1}
+  for(let j=1;j<=m;j++){dp[j]=j;bk[j]=2}
+  for(let i=1;i<=n;i++)for(let j=1;j<=m;j++){
+    const sm=sim(S[i-1],words[j-1].t),sub=sm>=.5?1-sm:9;
+    let v=dp[(i-1)*W+j-1]+sub,b=0;
+    const up=dp[(i-1)*W+j]+1;if(up<v){v=up;b=1}
+    const lf=dp[i*W+j-1]+1;if(lf<v){v=lf;b=2}
+    dp[i*W+j]=v;bk[i*W+j]=b}
+  const mt=new Int32Array(n).fill(-1);
+  for(let i=n,j=m;i>0||j>0;){const b=bk[i*W+j];
+    if(i>0&&j>0&&b===0){if(sim(S[i-1],words[j-1].t)>=.5)mt[i-1]=j-1;i--;j--}else if(i>0&&(b===1||j===0))i--;else j--}
+  const st=Array(N).fill(null),cnt=Array(N).fill(0);let hit=0;
+  for(let k=0;k<n;k++){const i=own[k];cnt[i]++;if(mt[k]>=0){hit++;const w=words[mt[k]];
+    st[i]=st[i]?[Math.min(st[i][0],w.s),Math.max(st[i][1],w.e)]:[w.s,w.e]}}
+  if(hit<n*.3)return null;
+  /* dòng không khớp được từ nào: chia đều theo số từ trong khoảng giữa hai dòng đã biết */
+  for(let i=0;i<N;){if(st[i]){i++;continue}
+    let j=i;while(j<N&&!st[j])j++;
+    const a=i>0?st[i-1][1]:Math.max(0,st[j]?st[j][0]-1:0),b=j<N?st[j][0]:dur;
+    const tw=cnt.slice(i,j).reduce((x,y)=>x+y+1,0);let t=a;
+    for(let k=i;k<j;k++){const d=Math.max(b-a,.1)*(cnt[k]+1)/tw;st[k]=[t,t+d];t+=d}
+    i=j}
+  return st;
+}
+/* parts: [[s,e]] từng dòng; eng: {r:Float32Array năng lượng mỗi 10ms} dùng để chọn đúng chỗ lặng nhất giữa hai dòng */
+function buildSegs(parts,dur,eng){
+  const N=parts.length,lo=Math.max(0,parts[0][0]-.15),hi=Math.min(dur,parts[N-1][1]+.25),cuts=[];
+  let p95=1;
+  if(eng){const so=Float32Array.from(eng).sort();p95=Math.max(so[Math.floor(so.length*.95)],1e-6)}
+  for(let i=0;i<N-1;i++){const e=parts[i][1],s=parts[i+1][0],m=(e+s)/2;let c=m;
+    if(eng){const a=Math.max(0,Math.floor((Math.min(e,s)-.1)*100)),z=Math.min(eng.length-1,Math.ceil((Math.max(e,s)+.1)*100));let best=1e9;
+      for(let f=a;f<=z;f++){const v=((eng[f-1]||eng[f])+eng[f]+(eng[f+1]||eng[f]))/3/p95+.15*Math.abs(f*.01-m);if(v<best){best=v;c=f*.01+.005}}}
+    cuts.push(c)}
+  for(let i=0;i<cuts.length;i++){const prev=i?cuts[i-1]:lo;if(cuts[i]<prev+.05)cuts[i]=prev+.05}
+  const b=[lo,...cuts,hi];
+  return b.slice(1).map((e,i)=>[+b[i].toFixed(2),+Math.max(e,b[i]+.05).toFixed(2)]);
+}
+async function loadASR(key,say){
+  if(asr&&asrKey===key)return asr;
+  const tf=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1');
+  asr=await tf.pipeline('automatic-speech-recognition',WM[key],{progress_callback:p=>{
+    if(p.status==='progress'&&p.file)say(`Đang tải mô hình Whisper ${key}… ${Math.round(p.progress||0)}% (${p.file.split('/').pop()})`)}});
+  asrKey=key;return asr;
+}
+async function to16k(blob){
+  ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
+  const buf=await ctx.decodeAudioData(await blob.arrayBuffer());
+  const oc=new OfflineAudioContext(1,Math.max(1,Math.ceil(buf.duration*16000)),16000),src=oc.createBufferSource();
+  src.buffer=buf;src.connect(oc.destination);src.start();
+  return (await oc.startRendering()).getChannelData(0);
+}
+async function whisperSplit(blob,ls,say){
+  const pipe=await loadASR(wkey(),say);
+  say('Đang đọc audio…');const a=await to16k(blob),dur=a.length/16000;
+  say('Đang nhận diện giọng nói… (trang có thể đứng hình một lúc, cứ đợi)');await new Promise(r=>setTimeout(r,80));
+  const o=await pipe(a,{language:'german',task:'transcribe',return_timestamps:'word',chunk_length_s:30,stride_length_s:5});
+  const words=(o.chunks||[]).filter(c=>c.timestamp&&c.timestamp[0]!=null)
+    .map(c=>({t:normW(c.text),s:c.timestamp[0],e:c.timestamp[1]==null?Math.min(dur,c.timestamp[0]+.4):c.timestamp[1]})).filter(w=>w.t);
+  const parts=alignLines(ls,words,dur);if(!parts)return null;
+  const fr=160,nf=Math.floor(a.length/fr),eng=new Float32Array(nf);
+  for(let i=0;i<nf;i++){let s=0;for(let k=0;k<fr;k++){const v=a[i*fr+k];s+=v*v}eng[i]=Math.sqrt(s/fr)}
+  return buildSegs(parts,dur,eng);
+}
+/* dùng Whisper nếu được, lỗi thì quay về cách dò khoảng lặng. Trả về [segs, ghiChú] */
+async function smartSplit(blob,ls,say,useW){
+  let note='';
+  if(useW){
+    try{const r=await whisperSplit(blob,ls,say);if(r)return [r,''];note='Whisper nghe không khớp script nên đã dùng cách dò khoảng lặng.'}
+    catch(e){console.error(e);note='Không chạy được Whisper (cần mạng ở lần đầu): '+(e&&e.message||e)+' → đã dùng cách dò khoảng lặng.'}
+  }
+  say('Đang tách audio…');
+  return [await detect(blob,ls.length,ls),note];
+}
 /* editor */
 function openEditor(){setAudio(cur.audio);$('et').textContent=head();$('ebook').value=cur.book||'';$('etitle').value=cur.title;$('escript').value=cur.script;$('etrans').value=cur.trans||'';$('emsg').textContent='';drawSegs(getLines(cur.script),cur.segs);show('vEdit')}
 function drawSegs(ls,sg){$('segs').innerHTML=ls.map((l,i)=>`<div class="seg"><span class="mu">${i+1}</span><span class="tt">${esc(l)}</span><input type="number" step="0.05" min="0" value="${sg[i][0]}"><input type="number" step="0.05" min="0" value="${sg[i][1]}"><button class="sbtn" data-p="${i}">▶</button></div>`).join('')}
 const readSegs=()=>[...$('segs').children].map(r=>{const n=r.querySelectorAll('input');return[+n[0].value,+n[1].value]});
 $('segs').onclick=e=>{const p=e.target.dataset.p;if(p!==undefined){const s=readSegs()[p];playRange(s[0],s[1])}};
-$('eauto').onclick=async()=>{const ls=getLines($('escript').value);if(!ls.length)return;$('emsg').textContent='Đang tách…';cur.segs=await detect(cur.audio,ls.length);drawSegs(ls,cur.segs);$('emsg').textContent=''};
+$('eauto').onclick=async()=>{const ls=getLines($('escript').value);if(!ls.length)return;$('emsg').textContent='Đang tách…';cur.segs=await detect(cur.audio,ls.length,ls);drawSegs(ls,cur.segs);$('emsg').textContent=''};
+$('ewh').onclick=async()=>{const ls=getLines($('escript').value);if(!ls.length)return;
+  const b=$('ewh');b.disabled=true;
+  try{const [sg,note]=await smartSplit(cur.audio,ls,m=>{$('emsg').textContent=m},true);cur.segs=sg;drawSegs(ls,sg);$('emsg').textContent=note||'Đã tách bằng Whisper ✓ – bấm ▶ để nghe thử rồi Lưu.'}
+  catch(e){$('emsg').textContent='Lỗi: '+(e&&e.message||e)}
+  b.disabled=false};
+['wm','wm2'].forEach(id=>{const el=$(id);el.value=wkey();el.onchange=()=>{try{localStorage.setItem('wmodel',el.value)}catch(e){}$('wm').value=$('wm2').value=el.value}});
 $('esave').onclick=async()=>{const ls=getLines($('escript').value),sg=readSegs();
   if(sg.length!==ls.length){$('emsg').textContent='Số dòng đã đổi – bấm "Tự tách lại" trước.';return}
   cur.book=$('ebook').value.trim();cur.title=$('etitle').value.trim()||cur.title;$('et').textContent=head();$('mt').textContent=head();cur.script=$('escript').value.trim();cur.trans=$('etrans').value.trim();cur.segs=sg;await put(cur);$('emsg').textContent='Đã lưu ✓';render()};
