@@ -26,7 +26,7 @@ h3{font-size:22px;margin:0 0 18px}
 .col{max-width:690px}.col.w{max-width:640px}
 .acc{margin-bottom:18px}.ah{background:var(--g);border-radius:18px;padding:22px 30px;font-size:24px;display:flex;justify-content:space-between;cursor:pointer;border:1px solid transparent}
 .acc.open .ah{border-color:var(--gr)}.ah span{transition:.2s}.acc.open .ah span{transform:rotate(180deg)}
-.nm{flex:1;font-style:normal}.ed{font-size:18px;font-weight:400;margin:0 18px;color:var(--gr);padding:0 6px}.ed:hover{background:var(--sel);border-radius:6px}
+.nm{flex:1;font-style:normal}.ed{font-size:18px;font-weight:400;margin:0 18px;color:var(--tx);padding:0 6px}.ed:hover{background:var(--sel);border-radius:6px}
 .ab{display:none;padding-top:14px}.acc.open .ab{display:block}.acc.open.anim .ab{animation:vin .3s ease both}
 .pill,.mode{background:var(--g);border-radius:16px;padding:16px 30px;margin-bottom:12px;cursor:pointer;border:1px solid transparent;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill small{display:block;color:var(--mu);font-size:12px}
@@ -42,19 +42,19 @@ h3{font-size:22px;margin:0 0 18px}
 .ov .bd{position:absolute;inset:0;overflow:hidden;pointer-events:none;color:var(--tx);border-radius:16px}
 .ov .bd .g{color:#158f4a}.ov .bd .r{color:var(--bad)}
 .ov textarea{position:relative;min-height:200px;background:transparent;color:transparent;caret-color:var(--tx);resize:vertical;outline:0}
-.ov textarea::placeholder{color:var(--mu)}.ov textarea::selection{background:rgba(245,179,1,.35);color:transparent}
+.ov textarea.st{caret-color:transparent}.ov textarea::placeholder{color:var(--mu)}.ov textarea::selection{background:rgba(245,179,1,.35);color:transparent}
 .fb{padding:18px 18px 0;font:17px/1.6 inherit;letter-spacing:1px;white-space:pre-wrap;word-break:break-word}.fb:empty{padding:0}.fb.no{color:var(--bad)}.fb.ok{color:var(--gr)}
 .cnt{text-align:right;margin:14px 0}
 .btns{display:flex;justify-content:space-between;gap:20px}
 .btn{border:0;border-radius:12px;padding:17px 0;font:600 16px system-ui,sans-serif;cursor:pointer;width:42%}
-.b1{background:var(--g);color:var(--gr)}.b2{background:var(--gr);color:var(--tx)}
-.sm{background:var(--g);border:0;border-radius:8px;padding:6px 14px;font:italic 15px system-ui,sans-serif;color:var(--gr);cursor:pointer;margin:0 8px 8px 0}
+.b1{background:var(--g);color:var(--tx)}.b2{background:var(--gr);color:var(--tx)}
+.sm{background:var(--g);border:0;border-radius:8px;padding:6px 14px;font:italic 15px system-ui,sans-serif;color:var(--tx);cursor:pointer;margin:0 8px 8px 0}
 .sm.on{background:var(--sel)}.tools{margin-top:18px}
 .rcard{background:var(--bg);box-shadow:var(--sh);border-radius:16px;min-height:300px;margin:18px 0;padding:20px;text-align:center;display:flex;flex-direction:column;justify-content:space-between}
 .rcard .s{font-size:19px;margin-top:80px}.rcard .t{color:var(--mu);font-size:16px;margin-top:6px}
-.nav2{display:flex;justify-content:center;gap:26px;align-items:center}.nav2 button{background:none;border:0;color:var(--gr);font-size:22px;cursor:pointer}
+.nav2{display:flex;justify-content:center;gap:26px;align-items:center}.nav2 button{background:none;border:0;color:var(--tx);font-size:22px;cursor:pointer}
 .tl .l{display:flex;gap:10px;padding:8px 6px;border-radius:6px;font-size:17px}.tl .l.on span.x{background:var(--sel)}
-.tl .l button{background:var(--g);border:0;border-radius:4px;color:var(--gr);cursor:pointer;height:26px;width:26px;flex:none;margin-top:2px}
+.tl .l button{background:var(--g);border:0;border-radius:4px;color:var(--tx);cursor:pointer;height:26px;width:26px;flex:none;margin-top:2px}
 .tl i{display:block;color:var(--mu);font-size:16px}
 .card{background:var(--g);border-radius:18px;padding:22px;max-width:760px;margin-bottom:16px}
 .card label{display:block;font-size:13px;color:var(--mu);margin:12px 0 4px}
@@ -527,13 +527,13 @@ $('eback').onclick=()=>show('vMode');
 /* listen & type */
 function startPractice(){setAudio(cur.audio);lines=getLines(cur.script);segs=cur.segs;idx=0;good=0;
   $('ttl').textContent='Advanced Dictation / '+head();$('pdone').classList.add('hide');$('pmain').classList.remove('hide');show('vType');go(0)}
-function go(i){idx=i;tries=0;force=null;greenTok=[];stale=false;$('ans').readOnly=false;$('ans').value='';paint();
+function go(i){idx=i;tries=0;force=null;greenTok=[];setStale(false);$('ans').readOnly=false;$('ans').value='';paint();
   if(idx>=lines.length){$('pmain').classList.add('hide');$('pdone').classList.remove('hide');$('sc').textContent=good+' / '+lines.length;return}
   $('cnt').textContent=`${idx+1}/${lines.length}`;$('ans').focus();replay()}
 function replay(){const s=segs[idx];if(s)playRange(s[0],s[1])}
 function target(i){let t=lines[i];if(pnOn)t=t.replace(/[.,;:!?„“"”»«()\-–—…]/g,'');return t.replace(/\s+/g,' ').trim()}
 const eq=(a,b)=>csOn?a===b:a.toLowerCase()===b.toLowerCase();
-let greenTok=[],stale=false; /* từng từ của lần Check gần nhất: true = đúng (xanh) */
+let greenTok=[],stale=false,lastInput='';function setStale(v){stale=v;const t=$('ans');if(t)t.classList.toggle('st',v)} /* từng từ của lần Check gần nhất: true = đúng (xanh) */
 function mask(t,u){const T=t.split(' '),U=u.split(' '),n=T.length,m=U.length,L=Array.from({length:n+1},()=>new Int16Array(m+1));
   for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)L[i][j]=eq(T[i],U[j])?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
   let i=0,j=0;const o=[];greenTok=[];
@@ -560,25 +560,25 @@ function paint(){
   else h=esc(v);
   bd.innerHTML=h+(v===''||v.endsWith('\n')?' ':'');bd.scrollTop=ta.scrollTop}
 const cleanAns=v=>{let u=v.replace(/\*/g,'');if(pnOn)u=u.replace(/[.,;:!?„“"”»«()\-–—…]/g,'');return u.replace(/\s+/g,' ').trim()};
-function check(){const ta=$('ans'),u=cleanAns(ta.value);if(!u){replay();return}
+function check(){const ta=$('ans'),raw=stale?lastInput:ta.value,u=cleanAns(raw);if(!u){replay();return}
   const t=target(idx);tries++;
   if(eq(t,u)){if(tries===1)good++;force='ok';ta.value=lines[idx];ta.readOnly=true;paint();setTimeout(()=>go(idx+1),700)}
-  else{force=null;ta.value=mask(t,u);const p=ta.value.indexOf('*');paint();ta.focus();if(p>=0)ta.setSelectionRange(p,p);stale=true}}
+  else{force=null;lastInput=raw;ta.value=mask(t,u);const p=ta.value.indexOf('*');paint();ta.focus();if(p>=0)ta.setSelectionRange(p,p);setStale(true)}}
 $('ans').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();check();return}
+  if(stale&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!['Control','Shift','Alt','Meta','Tab'].includes(e.key))clearWrong();
   /* đang hiện đáp án (đỏ): gõ phím nào thì xoá đáp án đi để gõ lại từ đầu */
   if(force==='no'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!['Control','Shift','Alt','Meta','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key)){$('ans').value='';force=null;paint()}});
 /* gõ đè lên dấu * : mỗi ký tự gõ vào sẽ thay đúng 1 dấu * ngay sau con trỏ */
 $('ans').addEventListener('input',e=>{const ta=$('ans'),p=ta.selectionStart;
   if(e.inputType==='insertText'&&ta.value[p]==='*'){ta.value=ta.value.slice(0,p)+ta.value.slice(p+1);ta.setSelectionRange(p,p)}
   force=null;paint()});
-function clearWrong(){if(!stale||force)return;stale=false;const ta=$('ans');
-  const keep=ta.value.split(/\s+/).filter(w=>w&&!w.includes('*'));
-  ta.value=keep.length?keep.join(' ')+' ':'';greenTok=[];paint();const e=ta.value.length;ta.setSelectionRange(e,e)}
+function clearWrong(){if(!stale||force)return;setStale(false);const ta=$('ans');
+  ta.value=lastInput;greenTok=[];paint();const e=ta.value.length;ta.setSelectionRange(e,e)}
 $('ans').addEventListener('click',clearWrong);$('ans').addEventListener('focus',clearWrong);
 $('ans').addEventListener('scroll',()=>{$('bd').scrollTop=$('ans').scrollTop});
 document.addEventListener('keydown',e=>{if(e.key==='Control'&&!e.repeat&&!$('vType').classList.contains('hide')&&idx<lines.length){e.preventDefault();replay()}});
 $('chk').onclick=check;$('skip').onclick=()=>go(idx+1);$('prev').onclick=()=>{if(idx>0)go(idx-1)};
-$('reveal').onclick=()=>{tries=2;greenTok=[];stale=false;force='no';$('ans').value=lines[idx];paint();$('ans').focus()};
+$('reveal').onclick=()=>{tries=2;greenTok=[];setStale(false);force='no';$('ans').value=lines[idx];paint();$('ans').focus()};
 $('cs').onclick=e=>{csOn=!csOn;e.target.classList.toggle('on',csOn);e.target.textContent='Hoa/thường: '+(csOn?'có':'không');paint()};
 $('pn').onclick=e=>{pnOn=!pnOn;e.target.classList.toggle('on',pnOn);e.target.textContent='Bỏ dấu câu: '+(pnOn?'có':'không');paint()};
 $('again').onclick=startPractice;$('pback').onclick=()=>show('vMode');
