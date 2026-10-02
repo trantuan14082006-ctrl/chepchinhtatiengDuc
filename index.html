@@ -11,7 +11,7 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
 .hd{max-width:1480px;margin:0 auto;padding:12px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
-.logo{display:flex;align-items:center;gap:10px;color:var(--gr);font-weight:700;font-size:22px}
+.logo{cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--gr);font-weight:700;font-size:22px}
 .logo b{width:40px;height:40px;border-radius:12px 12px 4px 4px;border:4px solid var(--gr);display:grid;place-items:center;font-size:20px}
 nav{display:flex;align-items:center;gap:8px}
 nav a{padding:7px 12px;border:1px solid transparent;border-radius:6px;cursor:pointer}
@@ -182,8 +182,13 @@ mkBar('bar2',R,()=>[0,R.duration||.01],()=>{clearInterval(timer);R.paused?R.play
 /* navigation */
 const V=['vHome','vMode','vType','vRead','vAdd','vEdit'];
 function show(v){V.forEach(i=>$(i).classList.toggle('hide',i!==v));A.pause();R.pause();clearInterval(timer);
-  $('nHome').classList.toggle('act',v!=='vAdd');$('nAdd').classList.toggle('act',v==='vAdd');scrollTo(0,0)}
-$('nHome').onclick=()=>{render();show('vHome')};$('nAdd').onclick=()=>show('vAdd');
+  $('nHome').classList.toggle('act',v!=='vAdd');$('nAdd').classList.toggle('act',v==='vAdd');scrollTo(0,0);
+  try{if(!fromPop){const inner=v!=='vHome',st=history.state&&history.state.in;
+    if(inner&&!st)history.pushState({in:1},'');else if(!inner&&st)history.back()}}catch(e){}}
+let fromPop=false;
+try{history.replaceState({in:0},'')}catch(e){}
+window.addEventListener('popstate',()=>{fromPop=true;render();show('vHome');fromPop=false});
+$('nHome').onclick=()=>{render();show('vHome')};document.querySelector('.logo').onclick=()=>{render();show('vHome')};$('nAdd').onclick=()=>show('vAdd');
 /* home */
 const openB=new Set();
 async function render(){
