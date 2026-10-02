@@ -137,8 +137,8 @@ h3{font-size:22px;margin:0 0 18px}
   </div>
   <div id="multi" class="hide"></div>
   <label style="display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="wchk" checked> Dùng Whisper (nhận diện giọng nói) để tách câu chính xác hơn</label>
-  <label>Mô hình Whisper – lần đầu phải tải về, cần mạng</label><select id="wm" class="wmsel"><option value="tiny">tiny (nhẹ, nhanh)</option><option value="base">base (khuyên dùng khi chỉ có CPU)</option><option value="small">small (chính xác nhất – nên dùng khi có GPU)</option></select>
-  <div class="row"><button class="sbtn p" id="save">Lưu & tự tách câu</button><span class="mu" id="msg"></span></div>
+  <label>Mô hình Whisper – lần đầu phải tải về, cần mạng</label><select id="wm" class="wmsel"><option value="tiny">tiny (nhẹ nhất – cho máy yếu)</option><option value="base">base (cân bằng – máy trung bình)</option><option value="small">small (chính xác nhất – nên dùng khi có GPU)</option></select>
+  <div class="row"><button class="sbtn p" id="save">Lưu & tự tách câu</button><span class="mu" id="msg"></span><button class="sbtn hide" id="wskip1">Bỏ qua Whisper</button></div>
  </div>
 </div>
 
@@ -148,7 +148,7 @@ h3{font-size:22px;margin:0 0 18px}
   <label>Sách / học phần</label><input type="text" id="ebook"><label>Tên bài</label><input type="text" id="etitle">
   <label>Script (mỗi câu 1 dòng)</label><textarea id="escript"></textarea>
   <label>Bản dịch tiếng Việt (mỗi câu 1 dòng)</label><textarea id="etrans"></textarea>
-  <div class="row"><button class="sbtn" id="eauto">Tự tách lại theo số dòng</button><button class="sbtn p" id="ewh">Tách bằng Whisper</button><select id="wm2" class="wmsel"><option value="tiny">tiny (nhẹ, nhanh)</option><option value="base">base (khuyên dùng khi chỉ có CPU)</option><option value="small">small (chính xác nhất – nên dùng khi có GPU)</option></select><button class="sbtn p" id="esave">Lưu</button><button class="sbtn" id="eback">← Quay lại</button><span class="mu" id="emsg"></span></div>
+  <div class="row"><button class="sbtn" id="eauto">Tự tách lại theo số dòng</button><button class="sbtn p" id="ewh">Tách bằng Whisper</button><select id="wm2" class="wmsel"><option value="tiny">tiny (nhẹ nhất – cho máy yếu)</option><option value="base">base (cân bằng – máy trung bình)</option><option value="small">small (chính xác nhất – nên dùng khi có GPU)</option></select><button class="sbtn p" id="esave">Lưu</button><button class="sbtn" id="eback">← Quay lại</button><span class="mu" id="emsg"></span><button class="sbtn hide" id="wskip2">Bỏ qua Whisper</button></div>
   <p class="mu">Chỉnh giây bắt đầu/kết thúc từng câu, bấm ▶ để nghe thử.</p><div id="segs"></div>
  </div>
 </div>
@@ -380,7 +380,11 @@ let asr=null,asrKey='';
 let gpuOK=!!navigator.gpu,gpuP=null;
 /* navigator.gpu có chưa chắc máy có GPU dùng được => hỏi adapter thật */
 const hasGPU=()=>gpuP||(gpuP=(async()=>{let ok=false;try{ok=!!(navigator.gpu&&await navigator.gpu.requestAdapter())}catch(e){}gpuOK=ok;return ok})());
-const wkey=()=>{const def=gpuOK?'small':'base';try{const k=localStorage.getItem('wmodel');return WM[k]?k:def}catch(e){return def}};
+/* mặc định theo sức máy: GPU mạnh -> small; GPU thường -> base; chỉ có CPU -> tiny (base nếu CPU đa luồng và đủ RAM) */
+const wdef=()=>{const c=navigator.hardwareConcurrency||4,ram=navigator.deviceMemory||8;
+  if(gpuOK)return c>=6&&ram>=8?'small':'base';
+  return window.crossOriginIsolated&&c>=6&&ram>=8?'base':'tiny'};
+const wkey=()=>{const def=wdef();try{const k=localStorage.getItem('wmodel');return WM[k]?k:def}catch(e){return def}};
 /* "12" trong script và "zwölf" Whisper nghe được sẽ khớp nhau */
 const D1=['null','eins','zwei','drei','vier','fünf','sechs','sieben','acht','neun','zehn','elf','zwölf','dreizehn','vierzehn','fünfzehn','sechzehn','siebzehn','achtzehn','neunzehn'],D10=['','','zwanzig','dreißig','vierzig','fünfzig','sechzig','siebzig','achtzig','neunzig'];
 function deNum(n){
@@ -444,6 +448,10 @@ function getWorker(){
   if(!wk)wk=new Worker(URL.createObjectURL(new Blob([$('wsrc').textContent],{type:'text/javascript'})),{type:'module'});
   return wk}
 function killWorker(){if(wk){wk.terminate();wk=null}}
+/* nút "Bỏ qua Whisper": dừng worker ngay, chuyển sang cách dò khoảng lặng (nhẹ, không cần model) */
+let cancelW=null;
+const skipBtns=on=>['wskip1','wskip2'].forEach(id=>{const b=$(id);if(b)b.classList.toggle('hide',!on)});
+['wskip1','wskip2'].forEach(id=>{const b=$(id);if(b)b.onclick=()=>{if(cancelW)cancelW()}});
 /* tải + nạp sẵn model ngay khi người dùng chọn file, để lúc bấm Lưu khỏi phải chờ */
 function preloadWhisper(){
   if(!$('wchk').checked)return;
@@ -456,7 +464,8 @@ async function runWhisper(a,key,say){
   const g=await hasGPU();
   return new Promise((res,rej)=>{
     const w=getWorker();let timer=null,t0=0;
-    const stop=()=>{clearInterval(timer);w.onmessage=w.onerror=null};
+    const stop=()=>{clearInterval(timer);w.onmessage=w.onerror=null;cancelW=null;skipBtns(false)};
+    cancelW=()=>{stop();killWorker();const e=new Error('skip');e.skip=true;rej(e)};skipBtns(true);
     w.onmessage=e=>{const d=e.data;
       if(d.type==='prog')say(`Đang tải mô hình Whisper ${key}… ${Math.round(d.p)}% (${d.f})`);
       else if(d.type==='load')say(`Đang nạp mô hình Whisper ${key} vào bộ nhớ…`);
@@ -510,7 +519,7 @@ async function smartSplit(blob,ls,say,useW,cached){
   let note='';
   if(useW){
     try{const r=await whisperSplit(blob,ls,say,cached);if(r)return [r.segs,'',r.words,r.conf];note='Whisper nghe không khớp script nên đã dùng cách dò khoảng lặng.'}
-    catch(e){console.error(e);note='Không chạy được Whisper (cần mạng ở lần đầu): '+(e&&e.message||e)+' → đã dùng cách dò khoảng lặng.'}
+    catch(e){if(e&&e.skip)note='Đã bỏ qua Whisper, dùng cách dò khoảng lặng.';else{console.error(e);note='Không chạy được Whisper (cần mạng ở lần đầu): '+(e&&e.message||e)+' → đã dùng cách dò khoảng lặng.'}}
   }
   say('Đang tách audio…');
   return [await detect(blob,ls.length,ls),note,null,null];
