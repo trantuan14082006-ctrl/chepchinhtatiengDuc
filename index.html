@@ -536,10 +536,11 @@ function replay(){const s=segs[idx];if(s)playRange(s[0],s[1])}
 function target(i){let t=lines[i];if(pnOn)t=t.replace(/[.,;:!?„“"”»«()\-–—…]/g,'');return t.replace(/\s+/g,' ').trim()}
 const eq=(a,b)=>csOn?a===b:a.toLowerCase()===b.toLowerCase();
 let greenTok=[],stale=false,lastInput='';function setStale(v){stale=v;const t=$('ans');if(t)t.classList.toggle('st',v)} /* từng từ của lần Check gần nhất: true = đúng (xanh) */
-function mask(t,u){const T=t.split(' '),U=u.split(' '),n=T.length,m=U.length,L=Array.from({length:n+1},()=>new Int16Array(m+1));
+function mask(t,u){const T=t.split(' '),U=u.split(' '),n=T.length,m=U.length,
+    O=(lines[idx]||'').split(/\s+/).filter(w=>(pnOn?w.replace(/[.,;:!?„“"”»«()\-–—…]/g,''):w)).filter(Boolean),OO=O.length===T.length?O:T,L=Array.from({length:n+1},()=>new Int16Array(m+1));
   for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)L[i][j]=eq(T[i],U[j])?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
   let i=0,j=0;const o=[];greenTok=[];
-  while(i<n){if(j<m&&eq(T[i],U[j])){o.push(T[i]);greenTok.push(true);i++;j++}else if(j<m&&L[i][j+1]>L[i+1][j])j++;else{o.push('*'.repeat(T[i].length));greenTok.push(false);i++}}
+  while(i<n){if(j<m&&eq(T[i],U[j])){o.push(OO[i]);greenTok.push(true);i++;j++}else if(j<m&&L[i][j+1]>L[i+1][j])j++;else{o.push('*'.repeat(T[i].length));greenTok.push(false);i++}}
   return o.join(' ')}
 /* hiển thị: 1 khung duy nhất. textarea trong suốt nằm đè lên lớp #bd tô màu (xanh = đúng, đỏ = sai/thiếu) */
 let force=null; /* 'ok' = cả câu xanh, 'no' = cả câu đỏ (xem đáp án), null = tô theo từng ký tự */
@@ -575,7 +576,7 @@ $('ans').addEventListener('input',e=>{const ta=$('ans'),p=ta.selectionStart;
   if(e.inputType==='insertText'&&ta.value[p]==='*'){ta.value=ta.value.slice(0,p)+ta.value.slice(p+1);ta.setSelectionRange(p,p)}
   force=null;paint()});
 function clearWrong(){if(!stale||force)return;setStale(false);const ta=$('ans');
-  ta.value=lastInput;greenTok=[];paint();const e=ta.value.length;ta.setSelectionRange(e,e)}
+  ta.value=lastInput.replace(/\s+$/,'')+' ';greenTok=[];paint();const e=ta.value.length;ta.setSelectionRange(e,e)}
 $('ans').addEventListener('click',clearWrong);$('ans').addEventListener('focus',clearWrong);
 $('ans').addEventListener('scroll',()=>{$('bd').scrollTop=$('ans').scrollTop});
 document.addEventListener('keydown',e=>{if(e.key==='Control'&&!e.repeat&&!$('vType').classList.contains('hide')&&idx<lines.length){e.preventDefault();replay()}});
