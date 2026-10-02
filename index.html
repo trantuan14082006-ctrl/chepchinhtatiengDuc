@@ -107,7 +107,7 @@ h3{font-size:22px;margin:0 0 18px}
   <div class="cnt" id="cnt"></div>
   <div class="btns"><button class="btn b1" id="chk">Check</button><button class="btn b2" id="skip">Next</button></div>
   <div class="tools"><button class="sm" data-c="ä">ä</button><button class="sm" data-c="ö">ö</button><button class="sm" data-c="ü">ü</button><button class="sm" data-c="ß">ß</button><button class="sm" data-c="Ä">Ä</button><button class="sm" data-c="Ö">Ö</button><button class="sm" data-c="Ü">Ü</button><br>
-  <button class="sm" id="prev">← Trước</button><button class="sm" id="reveal">Xem đáp án</button><button class="sm on" id="cs">Hoa/thường: có</button><button class="sm on" id="pn">Bỏ dấu câu: có</button>
+  <button class="sm" id="prev">← Trước</button><button class="sm" id="reveal">Xem đáp án</button><button class="sm" id="cs">Hoa/thường: không</button><button class="sm on" id="pn">Bỏ dấu câu: có</button>
   <div class="mu">Enter = kiểm tra · Ctrl = nghe lại câu</div></div>
  </div>
  <div id="pdone" class="hide"><div class="big" id="sc"></div><p class="mu">Số câu đúng ngay lần đầu.</p><button class="btn b2" id="again">Làm lại</button></div>
@@ -190,7 +190,7 @@ self.onmessage=e=>{chain=chain.then(()=>handle(e.data))};
 </script>
 <script>
 const $=id=>document.getElementById(id);
-let mem=[],db=null,cur=null,url=null,ctx=null,lines=[],trs=[],segs=[],idx=0,tries=0,good=0,timer=null,rate=1,muted=false,showTr=false,ridx=-1,csOn=true,pnOn=true;
+let mem=[],db=null,cur=null,url=null,ctx=null,lines=[],trs=[],segs=[],idx=0,tries=0,good=0,timer=null,rate=1,muted=false,showTr=false,ridx=-1,csOn=false,pnOn=true;
 const A=new Audio(),R=new Audio();
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const getLines=s=>{s=(s||'').replace(/\r/g,'').trim();
@@ -375,7 +375,7 @@ $('save').onclick=async()=>{
 /* ===== Whisper: nhận diện giọng nói trong trình duyệt rồi đối chiếu với script ===== */
 const WM={tiny:'Xenova/whisper-tiny',base:'Xenova/whisper-base',small:'Xenova/whisper-small'};
 let asr=null,asrKey='';
-const wkey=()=>{try{const k=localStorage.getItem('wmodel');return WM[k]?k:'base'}catch(e){return 'base'}};
+const wkey=()=>{const def=navigator.gpu?'small':'base';try{const k=localStorage.getItem('wmodel');return WM[k]?k:def}catch(e){return def}};
 /* "12" trong script và "zwölf" Whisper nghe được sẽ khớp nhau */
 const D1=['null','eins','zwei','drei','vier','fünf','sechs','sieben','acht','neun','zehn','elf','zwölf','dreizehn','vierzehn','fünfzehn','sechzehn','siebzehn','achtzehn','neunzehn'],D10=['','','zwanzig','dreißig','vierzig','fünfzig','sechzig','siebzig','achtzig','neunzig'];
 function deNum(n){
