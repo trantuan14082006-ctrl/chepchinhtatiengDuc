@@ -155,7 +155,9 @@ h3{font-size:22px;margin:0 0 18px}
 </main>
 
 <script type="text/plain" id="wsrc">
-import {pipeline} from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
+import {pipeline,env} from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
+/* đa luồng cho CPU (wasm): chỉ có tác dụng khi trang crossOriginIsolated (COOP/COEP); không thì tự chạy 1 luồng. Chừa 1 nhân cho UI */
+try{if(self.crossOriginIsolated)env.backends.onnx.wasm.numThreads=Math.max(1,Math.min(4,(self.navigator.hardwareConcurrency||4)-1))}catch(e){}
 let asr=null,curModel='',curDev='';
 const send=m=>self.postMessage(m);
 async function load(model,device){
@@ -375,7 +377,10 @@ $('save').onclick=async()=>{
 /* ===== Whisper: nhận diện giọng nói trong trình duyệt rồi đối chiếu với script ===== */
 const WM={tiny:'Xenova/whisper-tiny',base:'Xenova/whisper-base',small:'Xenova/whisper-small'};
 let asr=null,asrKey='';
-const wkey=()=>{const def=navigator.gpu?'small':'base';try{const k=localStorage.getItem('wmodel');return WM[k]?k:def}catch(e){return def}};
+let gpuOK=!!navigator.gpu,gpuP=null;
+/* navigator.gpu có chưa chắc máy có GPU dùng được => hỏi adapter thật */
+const hasGPU=()=>gpuP||(gpuP=(async()=>{let ok=false;try{ok=!!(navigator.gpu&&await navigator.gpu.requestAdapter())}catch(e){}gpuOK=ok;return ok})());
+const wkey=()=>{const def=gpuOK?'small':'base';try{const k=localStorage.getItem('wmodel');return WM[k]?k:def}catch(e){return def}};
 /* "12" trong script và "zwölf" Whisper nghe được sẽ khớp nhau */
 const D1=['null','eins','zwei','drei','vier','fünf','sechs','sieben','acht','neun','zehn','elf','zwölf','dreizehn','vierzehn','fünfzehn','sechzehn','siebzehn','achtzehn','neunzehn'],D10=['','','zwanzig','dreißig','vierzig','fünfzig','sechzig','siebzig','achtzig','neunzig'];
 function deNum(n){
@@ -388,7 +393,7 @@ const normW=s=>{const w=(s||'').toLowerCase().normalize('NFC').replace(/[^\p{L}\
 const toks=l=>l.split(/[\s\-–—]+/).map(normW).filter(Boolean);
 function lev(a,b){const n=a.length,m=b.length;let p=Array.from({length:m+1},(_,j)=>j);
   for(let i=1;i<=n;i++){const c=[i];for(let j=1;j<=m;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[m]}
-function sim(a,b){if(a===b)return 1;const mx=Math.max(a.length,b.length);if(mx<=3)return 0;return 1-lev(a,b)/mx}
+function sim(a,b){if(a===b)return 1;const mx=Math.max(a.length,b.length);if(mx<=3||Math.abs(a.length-b.length)>mx/2)return 0;return 1-lev(a,b)/mx}
 /* ls: các dòng script; words: [{t,s,e}] từ Whisper (t đã chuẩn hoá). Trả về [[start,end]] mỗi dòng hoặc null */
 function alignLines(ls,words,dur){
   const N=ls.length,S=[],own=[];
@@ -442,12 +447,13 @@ function killWorker(){if(wk){wk.terminate();wk=null}}
 /* tải + nạp sẵn model ngay khi người dùng chọn file, để lúc bấm Lưu khỏi phải chờ */
 function preloadWhisper(){
   if(!$('wchk').checked)return;
-  try{const w=getWorker(),key=wkey();
+  hasGPU().then(g=>{try{const w=getWorker(),key=wkey();
     w.onmessage=e=>{const d=e.data;if(d.type==='prog')$('fsum').dataset.pre=`Đang tải sẵn Whisper ${key}… ${Math.round(d.p)}%`,$('msg').textContent=$('fsum').dataset.pre;
       if(d.type==='preloaded'&&$('msg').textContent.startsWith('Đang tải sẵn'))$('msg').textContent='Whisper đã sẵn sàng ✓'};
-    w.postMessage({type:'preload',model:WM[key],gpu:!!navigator.gpu})}catch(e){}
+    w.postMessage({type:'preload',model:WM[key],gpu:g})}catch(e){}});
 }
-function runWhisper(a,key,say){
+async function runWhisper(a,key,say){
+  const g=await hasGPU();
   return new Promise((res,rej)=>{
     const w=getWorker();let timer=null,t0=0;
     const stop=()=>{clearInterval(timer);w.onmessage=w.onerror=null};
@@ -461,7 +467,7 @@ function runWhisper(a,key,say){
       else if(d.type==='err'){stop();killWorker();rej(new Error(d.msg))}};
     w.onerror=e=>{stop();killWorker();rej(new Error(e.message||'Không khởi động được Worker'))};
     const copy=a.slice();
-    w.postMessage({type:'run',audio:copy,model:WM[key],gpu:!!navigator.gpu},[copy.buffer]);
+    w.postMessage({type:'run',audio:copy,model:WM[key],gpu:g},[copy.buffer]);
   })}
 async function to16k(blob){
   ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
@@ -521,6 +527,7 @@ $('ewh').onclick=async()=>{const ls=getLines($('escript').value);if(!ls.length)r
     const [sg,note,wd,cn]=await smartSplit(cur.audio,ls,m=>{$('emsg').textContent=m},true,same?cur.words:null);cur.segs=sg;if(wd){cur.words=wd;cur.wmodel=wkey();cur.wver=2}cur.conf=cn||null;drawSegs(ls,sg,cur.conf);$('emsg').textContent=note||'Đã tách bằng Whisper ✓ – bấm ▶ để nghe thử rồi Lưu.'}
   catch(e){$('emsg').textContent='Lỗi: '+(e&&e.message||e)}
   b.disabled=false};
+hasGPU().then(()=>['wm','wm2'].forEach(id=>{const el=$(id);if(el)el.value=wkey()}));
 ['wm','wm2'].forEach(id=>{const el=$(id);el.value=wkey();el.onchange=()=>{try{localStorage.setItem('wmodel',el.value)}catch(e){}$('wm').value=$('wm2').value=el.value;if($('vAdd')&&!$('vAdd').classList.contains('hide')&&pend.length)preloadWhisper()}});
 $('esave').onclick=async()=>{const ls=getLines($('escript').value),sg=readSegs();
   if(sg.length!==ls.length){$('emsg').textContent='Số dòng đã đổi – bấm "Tự tách lại" trước.';return}
