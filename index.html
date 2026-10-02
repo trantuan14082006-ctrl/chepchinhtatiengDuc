@@ -527,17 +527,18 @@ $('eback').onclick=()=>show('vMode');
 /* listen & type */
 function startPractice(){setAudio(cur.audio);lines=getLines(cur.script);segs=cur.segs;idx=0;good=0;
   $('ttl').textContent='Advanced Dictation / '+head();$('pdone').classList.add('hide');$('pmain').classList.remove('hide');show('vType');go(0)}
-function go(i){idx=i;tries=0;force=null;$('ans').readOnly=false;$('ans').value='';paint();
+function go(i){idx=i;tries=0;force=null;greenTok=[];$('ans').readOnly=false;$('ans').value='';paint();
   if(idx>=lines.length){$('pmain').classList.add('hide');$('pdone').classList.remove('hide');$('sc').textContent=good+' / '+lines.length;return}
   $('cnt').textContent=`${idx+1}/${lines.length}`;$('ans').focus();replay()}
 function replay(){const s=segs[idx];if(s)playRange(s[0],s[1])}
 function target(i){let t=lines[i];if(pnOn)t=t.replace(/[.,;:!?„“"”»«()\-–—…]/g,'');return t.replace(/\s+/g,' ').trim()}
 const eq=(a,b)=>csOn?a===b:a.toLowerCase()===b.toLowerCase();
-function mask(t,u){const n=t.length,m=u.length,L=Array.from({length:n+1},()=>new Int16Array(m+1));
-  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)L[i][j]=eq(t[i],u[j])?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
-  let i=0,j=0,o='';
-  while(i<n){if(j<m&&eq(t[i],u[j])){o+=t[i];i++;j++}else if(j<m&&L[i][j+1]>L[i+1][j])j++;else{o+=t[i]===' '?' ':'*';i++}}
-  return o}
+let greenTok=[]; /* từng từ của lần Check gần nhất: true = đúng (xanh) */
+function mask(t,u){const T=t.split(' '),U=u.split(' '),n=T.length,m=U.length,L=Array.from({length:n+1},()=>new Int16Array(m+1));
+  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)L[i][j]=eq(T[i],U[j])?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
+  let i=0,j=0;const o=[];greenTok=[];
+  while(i<n){if(j<m&&eq(T[i],U[j])){o.push(T[i]);greenTok.push(true);i++;j++}else if(j<m&&L[i][j+1]>L[i+1][j])j++;else{o.push('*'.repeat(T[i].length));greenTok.push(false);i++}}
+  return o.join(' ')}
 /* hiển thị: 1 khung duy nhất. textarea trong suốt nằm đè lên lớp #bd tô màu (xanh = đúng, đỏ = sai/thiếu) */
 let force=null; /* 'ok' = cả câu xanh, 'no' = cả câu đỏ (xem đáp án), null = tô theo từng ký tự */
 const PUN=/[.,;:!?„“"”»«()\-–—…]/;
@@ -551,8 +552,11 @@ function matchedChars(t,v){
 function paint(){
   const ta=$('ans'),bd=$('bd'),v=ta.value;let h='';
   if(force)h=`<span class="${force==='ok'?'g':'r'}">${esc(v)}</span>`;
-  else if(idx<lines.length&&v){const m=matchedChars(target(idx),v);
-    for(let k=0;k<v.length;k++){const c=esc(v[k]);h+=m[k]===1?`<span class="g">${c}</span>`:(m[k]===0&&tries>0)?`<span class="r">${c}</span>`:c}}
+  else if(tries>0&&idx<lines.length){const parts=v.split(/(\s+)/),nw=parts.filter(x=>x&&!/^\s+$/.test(x)).length;let wi=0;
+    parts.forEach(x=>{if(!x)return;if(/^\s+$/.test(x)){h+=esc(x);return}
+      const g=nw===greenTok.length&&greenTok[wi];wi++;
+      if(g){h+=`<span class="g">${esc(x)}</span>`;return}
+      for(const ch of x)h+=ch==='*'?'<span class="r">*</span>':esc(ch)})}
   else h=esc(v);
   bd.innerHTML=h+(v===''||v.endsWith('\n')?' ':'');bd.scrollTop=ta.scrollTop}
 const cleanAns=v=>{let u=v.replace(/\*/g,'');if(pnOn)u=u.replace(/[.,;:!?„“"”»«()\-–—…]/g,'');return u.replace(/\s+/g,' ').trim()};
@@ -564,13 +568,13 @@ $('ans').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();c
   /* đang hiện đáp án (đỏ): gõ phím nào thì xoá đáp án đi để gõ lại từ đầu */
   if(force==='no'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!['Control','Shift','Alt','Meta','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key)){$('ans').value='';force=null;paint()}});
 /* gõ đè lên dấu * : mỗi ký tự gõ vào sẽ thay đúng 1 dấu * ngay sau con trỏ */
-$('ans').addEventListener('input',e=>{const ta=$('ans');if(/[\r\n]/.test(ta.value)){const q=ta.selectionStart;ta.value=ta.value.replace(/[\r\n]+/g,' ');ta.setSelectionRange(q,q)}const p=ta.selectionStart;
+$('ans').addEventListener('input',e=>{const ta=$('ans'),p=ta.selectionStart;
   if(e.inputType==='insertText'&&ta.value[p]==='*'){ta.value=ta.value.slice(0,p)+ta.value.slice(p+1);ta.setSelectionRange(p,p)}
   force=null;paint()});
 $('ans').addEventListener('scroll',()=>{$('bd').scrollTop=$('ans').scrollTop});
 document.addEventListener('keydown',e=>{if(e.key==='Control'&&!e.repeat&&!$('vType').classList.contains('hide')&&idx<lines.length){e.preventDefault();replay()}});
 $('chk').onclick=check;$('skip').onclick=()=>go(idx+1);$('prev').onclick=()=>{if(idx>0)go(idx-1)};
-$('reveal').onclick=()=>{tries=2;force='no';$('ans').value=lines[idx];paint();$('ans').focus()};
+$('reveal').onclick=()=>{tries=2;greenTok=[];force='no';$('ans').value=lines[idx];paint();$('ans').focus()};
 $('cs').onclick=e=>{csOn=!csOn;e.target.classList.toggle('on',csOn);e.target.textContent='Hoa/thường: '+(csOn?'có':'không');paint()};
 $('pn').onclick=e=>{pnOn=!pnOn;e.target.classList.toggle('on',pnOn);e.target.textContent='Bỏ dấu câu: '+(pnOn?'có':'không');paint()};
 $('again').onclick=startPractice;$('pback').onclick=()=>show('vMode');
