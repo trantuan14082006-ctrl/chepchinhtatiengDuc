@@ -111,7 +111,7 @@ h3{font-size:22px;margin:0 0 18px}
  <div class="th"><h1>Thêm bài mới</h1></div>
  <div class="card">
   <label>Sách / giáo trình</label><input type="text" id="book" placeholder="VD: Netzwerk A1">
-  <label>File audio <span class="mu">(chọn được nhiều file; có thể kèm file .txt cùng tên làm script, .vi.txt làm bản dịch)</span></label><input type="file" id="file" accept="audio/*,.txt" multiple>
+  <label>File audio <span class="mu">(chọn nhiều file thì sẽ gộp nối tiếp thành 1 bài; có thể kèm file .txt làm script, .vi.txt làm bản dịch)</span></label><input type="file" id="file" accept="audio/*,.txt" multiple>
   <div id="fsum" class="mu"></div>
   <div id="sTitle"><label>Tên bài</label><input type="text" id="title" placeholder="VD: Kapitel 1 – Track 02"></div>
   <div id="sBody">
@@ -120,7 +120,7 @@ h3{font-size:22px;margin:0 0 18px}
   </div>
   <div id="multi" class="hide"></div>
   <label style="display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="wchk" checked> Dùng Whisper (nhận diện giọng nói) để tách câu chính xác hơn</label>
-  <label>Mô hình Whisper – lần đầu phải tải về, cần mạng</label><select id="wm" class="wmsel"><option value="tiny">tiny (nhẹ, nhanh)</option><option value="base">base (khuyên dùng)</option><option value="small">small (chính xác nhất, nặng)</option></select>
+  <label>Mô hình Whisper – lần đầu phải tải về, cần mạng</label><select id="wm" class="wmsel"><option value="tiny">tiny (nhẹ, nhanh)</option><option value="base">base (khuyên dùng khi chỉ có CPU)</option><option value="small">small (chính xác nhất – nên dùng khi có GPU)</option></select>
   <div class="row"><button class="sbtn p" id="save">Lưu & tự tách câu</button><span class="mu" id="msg"></span></div>
  </div>
 </div>
@@ -131,12 +131,46 @@ h3{font-size:22px;margin:0 0 18px}
   <label>Sách / học phần</label><input type="text" id="ebook"><label>Tên bài</label><input type="text" id="etitle">
   <label>Script (mỗi câu 1 dòng)</label><textarea id="escript"></textarea>
   <label>Bản dịch tiếng Việt (mỗi câu 1 dòng)</label><textarea id="etrans"></textarea>
-  <div class="row"><button class="sbtn" id="eauto">Tự tách lại theo số dòng</button><button class="sbtn p" id="ewh">Tách bằng Whisper</button><select id="wm2" class="wmsel"><option value="tiny">tiny (nhẹ, nhanh)</option><option value="base">base (khuyên dùng)</option><option value="small">small (chính xác nhất, nặng)</option></select><button class="sbtn p" id="esave">Lưu</button><button class="sbtn" id="eback">← Quay lại</button><span class="mu" id="emsg"></span></div>
+  <div class="row"><button class="sbtn" id="eauto">Tự tách lại theo số dòng</button><button class="sbtn p" id="ewh">Tách bằng Whisper</button><select id="wm2" class="wmsel"><option value="tiny">tiny (nhẹ, nhanh)</option><option value="base">base (khuyên dùng khi chỉ có CPU)</option><option value="small">small (chính xác nhất – nên dùng khi có GPU)</option></select><button class="sbtn p" id="esave">Lưu</button><button class="sbtn" id="eback">← Quay lại</button><span class="mu" id="emsg"></span></div>
   <p class="mu">Chỉnh giây bắt đầu/kết thúc từng câu, bấm ▶ để nghe thử.</p><div id="segs"></div>
  </div>
 </div>
 </main>
 
+<script type="text/plain" id="wsrc">
+import {pipeline} from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
+let asr=null,curModel='',curDev='';
+const send=m=>self.postMessage(m);
+async function load(model,device){
+  if(asr&&curModel===model&&curDev===device)return;
+  asr=null;send({type:'load'});
+  const opt={device,progress_callback:p=>{if(p.status==='progress'&&p.file)send({type:'prog',p:p.progress||0,f:p.file.split('/').pop()})}};
+  opt.dtype=device==='webgpu'?{encoder_model:'fp32',decoder_model_merged:'q4'}:'q8';
+  asr=await pipeline('automatic-speech-recognition',model,opt);
+  curModel=model;curDev=device;
+}
+const OPT={language:'german',task:'transcribe',return_timestamps:'word',chunk_length_s:30,stride_length_s:5};
+async function handle(d){
+  if(d.type==='preload'){
+    try{await load(d.model,d.gpu?'webgpu':'wasm');send({type:'preloaded'})}catch(err){send({type:'perr'})}
+    return}
+  if(d.type!=='run')return;
+  try{
+    let dev=d.gpu?'webgpu':'wasm',o;
+    /* audio ngắn hơn 30s thì khỏi chia chunk/stride => đỡ phải chạy lặp phần chồng lấn */
+    const opt=d.audio.length<=16000*29?{...OPT,chunk_length_s:0,stride_length_s:0}:OPT;
+    try{await load(d.model,dev);send({type:'ready',device:dev});o=await asr(d.audio,opt)}
+    catch(err){
+      if(dev!=='webgpu')throw err;
+      console.warn('WebGPU lỗi, chuyển sang CPU',err);
+      dev='wasm';await load(d.model,dev);send({type:'ready',device:dev});o=await asr(d.audio,opt)}
+    send({type:'done',chunks:(o.chunks||[]).map(c=>({text:c.text,timestamp:c.timestamp}))});
+  }catch(err){send({type:'err',msg:String(err&&err.message||err)})}
+}
+/* xếp hàng: preload và run không bao giờ chạy chồng lên nhau */
+let chain=Promise.resolve();
+self.onmessage=e=>{chain=chain.then(()=>handle(e.data))};
+</script>
 <script>
 const $=id=>document.getElementById(id);
 let mem=[],db=null,cur=null,url=null,ctx=null,lines=[],trs=[],segs=[],idx=0,tries=0,good=0,timer=null,rate=1,muted=false,showTr=false,ridx=-1,csOn=true,pnOn=true;
@@ -255,52 +289,71 @@ $('medit').onclick=async()=>{await ensureSegs();openEditor()};
 let pend=[];
 const isAud=f=>f.type.startsWith('audio/')||/\.(mp3|wav|m4a|ogg|aac|flac|opus|wma)$/i.test(f.name);
 const baseName=n=>n.replace(/\.[^.]+$/,'');
+/* ghép nhiều file audio thành 1 file WAV (mono 24kHz), giữa các file chèn 0.6s im lặng */
+async function toMono(blob,rate){
+  ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
+  const buf=await ctx.decodeAudioData(await blob.arrayBuffer());
+  const oc=new OfflineAudioContext(1,Math.max(1,Math.ceil(buf.duration*rate)),rate),src=oc.createBufferSource();
+  src.buffer=buf;src.connect(oc.destination);src.start();
+  return (await oc.startRendering()).getChannelData(0);
+}
+function encWav(f,sr){
+  const n=f.length,b=new ArrayBuffer(44+n*2),v=new DataView(b);
+  const w=(o,t)=>{for(let i=0;i<t.length;i++)v.setUint8(o+i,t.charCodeAt(i))};
+  w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){const x=Math.max(-1,Math.min(1,f[i]));v.setInt16(44+i*2,x<0?x*32768:x*32767,true)}
+  return new Blob([b],{type:'audio/wav'});
+}
+async function mergeAudio(files,say){
+  const SR=24000,gap=Math.round(SR*.6),parts=[];let tot=0;
+  for(let i=0;i<files.length;i++){
+    if(say)say(`Đang gộp audio ${i+1}/${files.length}…`);
+    const d=await toMono(files[i],SR);parts.push(d);tot+=d.length+(i<files.length-1?gap:0)}
+  const out=new Float32Array(tot);let o=0;
+  parts.forEach((d,i)=>{out.set(d,o);o+=d.length+(i<parts.length-1?gap:0)});
+  return encWav(out,SR);
+}
+const commonTitle=names=>{let p=names[0];for(const n of names)while(p&&!n.startsWith(p))p=p.slice(0,-1);
+  p=p.replace(/[\s\-_.()0-9]+$/,'').trim();return p.length>=3?p:names[0]};
 $('file').onchange=async()=>{
+  preloadWhisper();
   const fs=[...$('file').files],nat=(a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true});
-  const au=fs.filter(isAud).sort(nat),tx=fs.filter(f=>/\.txt$/i.test(f.name));
+  const au=fs.filter(isAud).sort(nat),tx=fs.filter(f=>/\.txt$/i.test(f.name)).sort(nat);
   const rd=async f=>f?(await f.text()).replace(/^\uFEFF/,'').trim():'';
   pend=[];
+  const sc=[],tr=[];
   for(const a of au){const b=baseName(a.name).toLowerCase();
     const sf=tx.find(t=>baseName(t.name).toLowerCase()===b),tf=tx.find(t=>baseName(t.name).toLowerCase()===b+'.vi');
-    pend.push({file:a,title:baseName(a.name),script:await rd(sf),trans:await rd(tf)})}
-  const multi=pend.length>1;
-  $('sTitle').classList.toggle('hide',multi);$('sBody').classList.toggle('hide',multi);$('multi').classList.toggle('hide',!multi);
-  $('fsum').textContent=pend.length?`Đã chọn ${pend.length} file audio.`:'';
-  if(multi){
-    $('multi').innerHTML=pend.map((x,i)=>`<div class="card" style="background:var(--bg);border:1px solid var(--bd)" data-i="${i}"><b>${i+1}. ${esc(x.file.name)}</b>
-      <label>Tên bài</label><input type="text" class="mt" value="${esc(x.title)}">
-      <label>Script – mỗi câu 1 dòng</label><textarea class="ms">${esc(x.script)}</textarea>
-      <label>Bản dịch tiếng Việt (không bắt buộc)</label><textarea class="mr">${esc(x.trans)}</textarea></div>`).join('');
-  }else if(pend.length===1){
-    $('title').value=pend[0].title;
-    if(pend[0].script)$('script').value=pend[0].script;
-    if(pend[0].trans)$('trans').value=pend[0].trans;
-  }
+    pend.push({file:a,title:baseName(a.name)});
+    const x=await rd(sf),y=await rd(tf);if(x)sc.push(x);if(y)tr.push(y)}
+  /* không có .txt cùng tên: nếu chỉ chọn 1 file .txt (hoặc .vi.txt) thì coi là script (bản dịch) chung cho cả bài */
+  if(!sc.length){const f=tx.filter(t=>!/\.vi$/i.test(baseName(t.name)));if(f.length===1)sc.push(await rd(f[0]))}
+  if(!tr.length){const f=tx.filter(t=>/\.vi$/i.test(baseName(t.name)));if(f.length===1)tr.push(await rd(f[0]))}
+  const join=arr=>arr.join(arr.some(t=>/\n[ \t]*\n/.test(t))?'\n\n':'\n');
+  $('fsum').textContent=!pend.length?'':pend.length>1
+    ?`Đã chọn ${pend.length} file audio → sẽ gộp thành 1 bài (theo thứ tự): `+pend.map(x=>x.file.name).join(' → ')
+    :`Đã chọn 1 file audio: ${pend[0].file.name}`;
+  if(pend.length){
+    $('title').value=pend.length>1?commonTitle(pend.map(x=>baseName(x.file.name))):pend[0].title;
+    if(sc.length)$('script').value=join(sc);
+    if(tr.length)$('trans').value=join(tr)}
 };
 $('save').onclick=async()=>{
-  const book=$('book').value.trim();
+  const book=$('book').value.trim(),title=$('title').value.trim(),script=$('script').value.trim(),trans=$('trans').value.trim();
   if(!pend.length){$('msg').textContent='Cần chọn ít nhất 1 file audio.';return}
-  let items;
-  if(pend.length>1){
-    items=[...$('multi').children].map((c,i)=>({file:pend[i].file,title:c.querySelector('.mt').value.trim(),script:c.querySelector('.ms').value.trim(),trans:c.querySelector('.mr').value.trim()}));
-    const bad=items.findIndex(x=>!x.title||!x.script);
-    if(bad>=0){$('msg').textContent=`Bài ${bad+1} thiếu tên bài hoặc script.`;return}
-  }else{
-    items=[{file:pend[0].file,title:$('title').value.trim(),script:$('script').value.trim(),trans:$('trans').value.trim()}];
-    if(!items[0].title||!items[0].script){$('msg').textContent='Cần đủ tên bài, audio và script.';return}
-  }
-  let ok=0,fail=[],notes=new Set(),useW=$('wchk').checked;
-  for(let i=0;i<items.length;i++){const it=items[i],pre=items.length>1?`(${i+1}/${items.length}) `:'';
-    try{const ls=getLines(it.script),[sg,note]=await smartSplit(it.file,ls,m=>{$('msg').textContent=pre+m},useW);
-      if(note)notes.add(note);
-      await put({id:Date.now()+i,title:it.title,book,script:it.script,trans:it.trans,audio:it.file,segs:sg});ok++}
-    catch(e){fail.push(it.file.name)}}
-  if(!fail.length){
-    $('title').value=$('script').value=$('trans').value=$('file').value='';pend=[];
-    $('multi').innerHTML='';$('fsum').textContent='';$('multi').classList.add('hide');$('sTitle').classList.remove('hide');$('sBody').classList.remove('hide');
-    $('msg').textContent=`Đã lưu ${ok} bài ✓ – vào bài và chọn "Chỉnh mốc" để kiểm tra các câu. `+[...notes].join(' ');
-  }else $('msg').textContent=`Đã lưu ${ok} bài. Không đọc được: ${fail.join(', ')}`;
-  render();
+  if(!title||!script){$('msg').textContent='Cần đủ tên bài, audio và script.';return}
+  const btn=$('save');btn.disabled=true;
+  try{
+    let blob=pend[0].file;
+    if(pend.length>1)blob=await mergeAudio(pend.map(x=>x.file),m=>{$('msg').textContent=m});
+    const ls=getLines(script),[sg,note,wd]=await smartSplit(blob,ls,m=>{$('msg').textContent=m},$('wchk').checked);
+    await put({id:Date.now(),title,book,script,trans,audio:blob,segs:sg,words:wd||null,wmodel:wd?wkey():''});
+    const n=pend.length;
+    $('title').value=$('script').value=$('trans').value=$('file').value='';pend=[];$('fsum').textContent='';
+    $('msg').textContent=`Đã lưu 1 bài${n>1?` (gộp từ ${n} file audio)`:''} ✓ – vào bài và chọn "Chỉnh mốc" để kiểm tra các câu. `+(note||'');
+  }catch(e){console.error(e);$('msg').textContent='Lỗi: '+(e&&e.message||e)}
+  btn.disabled=false;render();
 };
 /* ===== Whisper: nhận diện giọng nói trong trình duyệt rồi đối chiếu với script ===== */
 const WM={tiny:'Xenova/whisper-tiny',base:'Xenova/whisper-base',small:'Xenova/whisper-small'};
@@ -354,13 +407,36 @@ function buildSegs(parts,dur,eng){
   const b=[lo,...cuts,hi];
   return b.slice(1).map((e,i)=>[+b[i].toFixed(2),+Math.max(e,b[i]+.05).toFixed(2)]);
 }
-async function loadASR(key,say){
-  if(asr&&asrKey===key)return asr;
-  const tf=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1');
-  asr=await tf.pipeline('automatic-speech-recognition',WM[key],{progress_callback:p=>{
-    if(p.status==='progress'&&p.file)say(`Đang tải mô hình Whisper ${key}… ${Math.round(p.progress||0)}% (${p.file.split('/').pop()})`)}});
-  asrKey=key;return asr;
+/* Whisper chạy trong Web Worker => trang không bị đứng hình. Có WebGPU thì dùng GPU (nhanh), không thì CPU (wasm, bản q8 nhẹ) */
+let wk=null;
+function getWorker(){
+  if(!wk)wk=new Worker(URL.createObjectURL(new Blob([$('wsrc').textContent],{type:'text/javascript'})),{type:'module'});
+  return wk}
+function killWorker(){if(wk){wk.terminate();wk=null}}
+/* tải + nạp sẵn model ngay khi người dùng chọn file, để lúc bấm Lưu khỏi phải chờ */
+function preloadWhisper(){
+  if(!$('wchk').checked)return;
+  try{const w=getWorker(),key=wkey();
+    w.onmessage=e=>{const d=e.data;if(d.type==='prog')$('fsum').dataset.pre=`Đang tải sẵn Whisper ${key}… ${Math.round(d.p)}%`,$('msg').textContent=$('fsum').dataset.pre;
+      if(d.type==='preloaded'&&$('msg').textContent.startsWith('Đang tải sẵn'))$('msg').textContent='Whisper đã sẵn sàng ✓'};
+    w.postMessage({type:'preload',model:WM[key],gpu:!!navigator.gpu})}catch(e){}
 }
+function runWhisper(a,key,say){
+  return new Promise((res,rej)=>{
+    const w=getWorker();let timer=null,t0=0;
+    const stop=()=>{clearInterval(timer);w.onmessage=w.onerror=null};
+    w.onmessage=e=>{const d=e.data;
+      if(d.type==='prog')say(`Đang tải mô hình Whisper ${key}… ${Math.round(d.p)}% (${d.f})`);
+      else if(d.type==='load')say(`Đang nạp mô hình Whisper ${key} vào bộ nhớ…`);
+      else if(d.type==='ready'){t0=Date.now();const gpu=d.device==='webgpu';
+        const tick=()=>say(`Đang nhận diện giọng nói bằng ${gpu?'GPU':'CPU'}… ${Math.round((Date.now()-t0)/1000)}s (trang vẫn dùng bình thường)`);
+        tick();timer=setInterval(tick,1000)}
+      else if(d.type==='done'){stop();res(d.chunks||[])}
+      else if(d.type==='err'){stop();killWorker();rej(new Error(d.msg))}};
+    w.onerror=e=>{stop();killWorker();rej(new Error(e.message||'Không khởi động được Worker'))};
+    const copy=a.slice();
+    w.postMessage({type:'run',audio:copy,model:WM[key],gpu:!!navigator.gpu},[copy.buffer]);
+  })}
 async function to16k(blob){
   ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
   const buf=await ctx.decodeAudioData(await blob.arrayBuffer());
@@ -368,27 +444,30 @@ async function to16k(blob){
   src.buffer=buf;src.connect(oc.destination);src.start();
   return (await oc.startRendering()).getChannelData(0);
 }
-async function whisperSplit(blob,ls,say){
-  const pipe=await loadASR(wkey(),say);
+async function whisperSplit(blob,ls,say,cached){
   say('Đang đọc audio…');const a=await to16k(blob),dur=a.length/16000;
-  say('Đang nhận diện giọng nói… (trang có thể đứng hình một lúc, cứ đợi)');await new Promise(r=>setTimeout(r,80));
-  const o=await pipe(a,{language:'german',task:'transcribe',return_timestamps:'word',chunk_length_s:30,stride_length_s:5});
-  const words=(o.chunks||[]).filter(c=>c.timestamp&&c.timestamp[0]!=null)
-    .map(c=>({t:normW(c.text),s:c.timestamp[0],e:c.timestamp[1]==null?Math.min(dur,c.timestamp[0]+.4):c.timestamp[1]})).filter(w=>w.t);
-  const parts=alignLines(ls,words,dur);if(!parts)return null;
+  let words=cached,parts=null;
+  if(words)parts=alignLines(ls,words,dur);          /* đã có từ Whisper nghe sẵn => đối chiếu lại tức thì */
+  if(!parts){
+    const chunks=await runWhisper(a,wkey(),say);
+    words=chunks.filter(c=>c.timestamp&&c.timestamp[0]!=null)
+      .map(c=>({t:normW(c.text),s:c.timestamp[0],e:c.timestamp[1]==null?Math.min(dur,c.timestamp[0]+.4):c.timestamp[1]})).filter(w=>w.t);
+    say('Đang đối chiếu với script…');await new Promise(r=>setTimeout(r,0));
+    parts=alignLines(ls,words,dur)}
+  if(!parts)return null;
   const fr=160,nf=Math.floor(a.length/fr),eng=new Float32Array(nf);
   for(let i=0;i<nf;i++){let s=0;for(let k=0;k<fr;k++){const v=a[i*fr+k];s+=v*v}eng[i]=Math.sqrt(s/fr)}
-  return buildSegs(parts,dur,eng);
+  return {segs:buildSegs(parts,dur,eng),words};
 }
-/* dùng Whisper nếu được, lỗi thì quay về cách dò khoảng lặng. Trả về [segs, ghiChú] */
-async function smartSplit(blob,ls,say,useW){
+/* dùng Whisper nếu được, lỗi thì quay về cách dò khoảng lặng. Trả về [segs, ghiChú, words] */
+async function smartSplit(blob,ls,say,useW,cached){
   let note='';
   if(useW){
-    try{const r=await whisperSplit(blob,ls,say);if(r)return [r,''];note='Whisper nghe không khớp script nên đã dùng cách dò khoảng lặng.'}
+    try{const r=await whisperSplit(blob,ls,say,cached);if(r)return [r.segs,'',r.words];note='Whisper nghe không khớp script nên đã dùng cách dò khoảng lặng.'}
     catch(e){console.error(e);note='Không chạy được Whisper (cần mạng ở lần đầu): '+(e&&e.message||e)+' → đã dùng cách dò khoảng lặng.'}
   }
   say('Đang tách audio…');
-  return [await detect(blob,ls.length,ls),note];
+  return [await detect(blob,ls.length,ls),note,null];
 }
 /* editor */
 function openEditor(){setAudio(cur.audio);$('et').textContent=head();$('ebook').value=cur.book||'';$('etitle').value=cur.title;$('escript').value=cur.script;$('etrans').value=cur.trans||'';$('emsg').textContent='';drawSegs(getLines(cur.script),cur.segs);show('vEdit')}
@@ -398,10 +477,11 @@ $('segs').onclick=e=>{const p=e.target.dataset.p;if(p!==undefined){const s=readS
 $('eauto').onclick=async()=>{const ls=getLines($('escript').value);if(!ls.length)return;$('emsg').textContent='Đang tách…';cur.segs=await detect(cur.audio,ls.length,ls);drawSegs(ls,cur.segs);$('emsg').textContent=''};
 $('ewh').onclick=async()=>{const ls=getLines($('escript').value);if(!ls.length)return;
   const b=$('ewh');b.disabled=true;
-  try{const [sg,note]=await smartSplit(cur.audio,ls,m=>{$('emsg').textContent=m},true);cur.segs=sg;drawSegs(ls,sg);$('emsg').textContent=note||'Đã tách bằng Whisper ✓ – bấm ▶ để nghe thử rồi Lưu.'}
+  try{const same=cur.words&&cur.wmodel===wkey();
+    const [sg,note,wd]=await smartSplit(cur.audio,ls,m=>{$('emsg').textContent=m},true,same?cur.words:null);cur.segs=sg;if(wd){cur.words=wd;cur.wmodel=wkey()}drawSegs(ls,sg);$('emsg').textContent=note||'Đã tách bằng Whisper ✓ – bấm ▶ để nghe thử rồi Lưu.'}
   catch(e){$('emsg').textContent='Lỗi: '+(e&&e.message||e)}
   b.disabled=false};
-['wm','wm2'].forEach(id=>{const el=$(id);el.value=wkey();el.onchange=()=>{try{localStorage.setItem('wmodel',el.value)}catch(e){}$('wm').value=$('wm2').value=el.value}});
+['wm','wm2'].forEach(id=>{const el=$(id);el.value=wkey();el.onchange=()=>{try{localStorage.setItem('wmodel',el.value)}catch(e){}$('wm').value=$('wm2').value=el.value;if($('vAdd')&&!$('vAdd').classList.contains('hide')&&pend.length)preloadWhisper()}});
 $('esave').onclick=async()=>{const ls=getLines($('escript').value),sg=readSegs();
   if(sg.length!==ls.length){$('emsg').textContent='Số dòng đã đổi – bấm "Tự tách lại" trước.';return}
   cur.book=$('ebook').value.trim();cur.title=$('etitle').value.trim()||cur.title;$('et').textContent=head();$('mt').textContent=head();cur.script=$('escript').value.trim();cur.trans=$('etrans').value.trim();cur.segs=sg;await put(cur);$('emsg').textContent='Đã lưu ✓';render()};
