@@ -6,16 +6,17 @@
 <title>Diktat Dashboard</title>
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
---bg:#fff;--g:#f3f4f2;--gr:#158f4a;--tx:#14181f;--mu:#5b6470;--bd:#d5d9d4;--sel:#cdeedc;--bad:#c0341d;--sh:0 2px 10px rgba(0,0,0,.1);color-scheme:light}
+--bg:#fff;--g:#f3f4f2;--gr:#158f4a;--tx:#14181f;--mu:#5b6470;--bd:#d5d9d4;--sel:#cdeedc;--bad:#c0341d;--sh:0 2px 10px rgba(0,0,0,.1);--yl:#f5b301;--yl2:#fff6d6;color-scheme:light}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
 .hd{max-width:1480px;margin:0 auto;padding:12px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
-.logo{cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--gr);font-weight:700;font-size:22px}
-.logo b{width:40px;height:40px;border-radius:12px 12px 4px 4px;border:4px solid var(--gr);display:grid;place-items:center;font-size:20px}
+.logo{cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--yl);font-weight:700;font-size:22px}
+.logo b{width:40px;height:40px;border-radius:12px 12px 4px 4px;border:4px solid var(--yl);display:grid;place-items:center;font-size:20px}
 nav{display:flex;align-items:center;gap:8px}
-nav a{padding:7px 12px;border:1px solid transparent;border-radius:6px;cursor:pointer}
-nav a.act{border-color:var(--gr);color:var(--gr);font-weight:600}
+nav a{padding:7px 14px;border:2px solid transparent;border-radius:8px;cursor:pointer;transition:border-color .25s,background-color .25s,transform .15s}
+nav a:hover{border-color:rgba(245,179,1,.45)}nav a:active{transform:scale(.96)}
+nav a.act{border-color:var(--yl);background:var(--yl2);color:var(--tx);font-weight:600}
 .av{width:44px;height:44px;border-radius:50%;background:var(--gr);color:#fff;display:grid;place-items:center;margin-left:14px}
 main{max-width:1480px;margin:0 auto;padding:10px 48px 70px}
 .th{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin:18px 0 26px}
@@ -26,7 +27,7 @@ h3{font-size:22px;margin:0 0 18px}
 .acc{margin-bottom:18px}.ah{background:var(--g);border-radius:18px;padding:22px 30px;font-size:24px;display:flex;justify-content:space-between;cursor:pointer;border:1px solid transparent}
 .acc.open .ah{border-color:var(--gr)}.ah span{transition:.2s}.acc.open .ah span{transform:rotate(180deg)}
 .nm{flex:1;font-style:normal}.ed{font-size:18px;font-weight:400;margin:0 18px;color:var(--gr);padding:0 6px}.ed:hover{background:var(--sel);border-radius:6px}
-.ab{display:none;padding-top:14px}.acc.open .ab{display:block}
+.ab{display:none;padding-top:14px}.acc.open .ab{display:block}.acc.open.anim .ab{animation:vin .3s ease both}
 .pill,.mode{background:var(--g);border-radius:16px;padding:16px 30px;margin-bottom:12px;cursor:pointer;border:1px solid transparent;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill small{display:block;color:var(--mu);font-size:12px}
 .mode{max-width:690px;font-size:20px;padding:18px 30px}.pill:hover,.mode:hover{border-color:var(--gr)}
@@ -36,7 +37,12 @@ h3{font-size:22px;margin:0 0 18px}
 .sw{position:relative}.menu{position:absolute;right:-8px;top:34px;background:var(--bg);box-shadow:var(--sh);border-radius:14px;z-index:9;padding:6px 0;width:90px;max-height:300px;overflow:auto}
 .menu div{padding:8px 18px;cursor:pointer;font-size:15px}.menu .sel{background:var(--sel)}
 .box{border:1px solid var(--bd);border-radius:16px;margin-top:16px;background:var(--bg)}
-.box textarea{width:100%;min-height:200px;border:0;background:transparent;color:var(--tx);font:17px/1.6 inherit;padding:18px;resize:vertical;outline:0}
+.ov{position:relative}
+.ov .bd,.ov textarea{display:block;width:100%;margin:0;border:0;padding:18px;font-family:inherit;font-size:17px;line-height:1.6;letter-spacing:.3px;white-space:pre-wrap;overflow-wrap:break-word;word-break:break-word}
+.ov .bd{position:absolute;inset:0;overflow:hidden;pointer-events:none;color:var(--tx);border-radius:16px}
+.ov .bd .g{color:var(--gr)}.ov .bd .r{color:var(--bad)}
+.ov textarea{position:relative;min-height:200px;background:transparent;color:transparent;caret-color:var(--tx);resize:vertical;outline:0}
+.ov textarea::placeholder{color:var(--mu)}.ov textarea::selection{background:rgba(245,179,1,.35);color:transparent}
 .fb{padding:18px 18px 0;font:17px/1.6 inherit;letter-spacing:1px;white-space:pre-wrap;word-break:break-word}.fb:empty{padding:0}.fb.no{color:var(--bad)}.fb.ok{color:var(--gr)}
 .cnt{text-align:right;margin:14px 0}
 .btns{display:flex;justify-content:space-between;gap:20px}
@@ -57,10 +63,19 @@ h3{font-size:22px;margin:0 0 18px}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
 .sbtn{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:9px 14px;font:600 14px system-ui;cursor:pointer;color:var(--tx)}.sbtn.p{background:var(--gr);border-color:var(--gr);color:#fff}
 .seg{display:grid;grid-template-columns:28px 1fr 70px 70px 40px;gap:6px;align-items:center;margin:6px 0}.seg input{padding:6px!important;font-size:14px!important}
-.seg .tt{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seg.warn{background:var(--yl2);border-radius:8px;padding:3px 4px}.seg .tt{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wmsel{padding:9px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:14px system-ui;max-width:100%}
 .mu{color:var(--mu);font-size:14px}.hide{display:none!important}.big{font-size:34px;font-weight:700}
 @media(max-width:700px){main{padding:6px 16px 60px}.hd{padding:10px 16px}.ah{padding:16px 20px;font-size:20px}.btn{width:46%}}
+
+/* hiệu ứng chuyển nhẹ */
+@keyframes vin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.vin{animation:vin .35s cubic-bezier(.2,.7,.2,1) both}
+.ah,.pill,.mode,.sbtn,.btn,.sm,.logo b{transition:border-color .2s,background-color .2s,transform .2s,box-shadow .2s}
+.ah:hover,.pill:hover,.mode:hover{transform:translateX(4px)}
+.ah:active,.pill:active,.mode:active,.sbtn:active,.btn:active,.sm:active{transform:scale(.97)}
+.logo:hover b{transform:rotate(-6deg) scale(1.06)}
+@media(prefers-reduced-motion:reduce){.vin,.acc.open.anim .ab{animation:none}*{transition:none!important}}
 </style>
 </head>
 <body>
@@ -86,7 +101,7 @@ h3{font-size:22px;margin:0 0 18px}
  <h3>Practice: Listen and Type</h3>
  <div class="col w"><div class="bar" id="bar1"></div>
  <div id="pmain">
-  <div class="box"><div class="fb" id="fb"></div><textarea id="ans" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="Type what you hear"></textarea></div>
+  <div class="box"><div class="ov"><div class="bd" id="bd"></div><textarea id="ans" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="Type what you hear"></textarea></div></div>
   <div class="cnt" id="cnt"></div>
   <div class="btns"><button class="btn b1" id="chk">Check</button><button class="btn b2" id="skip">Next</button></div>
   <div class="tools"><button class="sm" data-c="ä">ä</button><button class="sm" data-c="ö">ö</button><button class="sm" data-c="ü">ü</button><button class="sm" data-c="ß">ß</button><button class="sm" data-c="Ä">Ä</button><button class="sm" data-c="Ö">Ö</button><button class="sm" data-c="Ü">Ü</button><br>
@@ -252,7 +267,7 @@ mkBar('bar1',A,()=>segs[idx]||[0,1],()=>replay());
 mkBar('bar2',R,()=>[0,R.duration||.01],()=>{clearInterval(timer);R.paused?R.play():R.pause()});
 /* navigation */
 const V=['vHome','vMode','vType','vRead','vAdd','vEdit'];
-function show(v){V.forEach(i=>$(i).classList.toggle('hide',i!==v));A.pause();R.pause();clearInterval(timer);
+function show(v){V.forEach(i=>$(i).classList.toggle('hide',i!==v));{const el=$(v);el.classList.remove('vin');void el.offsetWidth;el.classList.add('vin')}A.pause();R.pause();clearInterval(timer);
   $('nHome').classList.toggle('act',v!=='vAdd');$('nAdd').classList.toggle('act',v==='vAdd');scrollTo(0,0);
   try{if(!fromPop){const inner=v!=='vHome',st=history.state&&history.state.in;
     if(inner&&!st)history.pushState({in:1},'');else if(!inner&&st)history.back()}}catch(e){}}
@@ -276,7 +291,7 @@ $('list').onclick=async e=>{
     if(nv&&nv.trim()){const nn=nv.trim();for(const l of await all())if((l.book||'Khác')===k){l.book=nn;await put(l)}
       if(openB.has(k)){openB.delete(k);openB.add(nn)}render()}return}
   const ah=e.target.closest('.ah'),pl=e.target.closest('.pill');
-  if(ah){const k=ah.dataset.k;openB.has(k)?openB.delete(k):openB.add(k);ah.parentNode.classList.toggle('open')}
+  if(ah){const k=ah.dataset.k;openB.has(k)?openB.delete(k):openB.add(k);ah.parentNode.classList.toggle('anim',!openB.has(k)?false:true);ah.parentNode.classList.toggle('open')}
   if(pl){cur=(await all()).find(x=>x.id==pl.dataset.id);$('mt').textContent=(cur.book?cur.book+' - ':'')+cur.title;show('vMode')}
 };
 const head=()=>(cur.book?cur.book+' - ':'')+cur.title;
@@ -347,8 +362,8 @@ $('save').onclick=async()=>{
   try{
     let blob=pend[0].file;
     if(pend.length>1)blob=await mergeAudio(pend.map(x=>x.file),m=>{$('msg').textContent=m});
-    const ls=getLines(script),[sg,note,wd]=await smartSplit(blob,ls,m=>{$('msg').textContent=m},$('wchk').checked);
-    await put({id:Date.now(),title,book,script,trans,audio:blob,segs:sg,words:wd||null,wmodel:wd?wkey():''});
+    const ls=getLines(script),[sg,note,wd,cn]=await smartSplit(blob,ls,m=>{$('msg').textContent=m},$('wchk').checked);
+    await put({id:Date.now(),title,book,script,trans,audio:blob,segs:sg,words:wd||null,wmodel:wd?wkey():'',wver:2,conf:cn||null});
     const n=pend.length;
     $('title').value=$('script').value=$('trans').value=$('file').value='';pend=[];$('fsum').textContent='';
     $('msg').textContent=`Đã lưu 1 bài${n>1?` (gộp từ ${n} file audio)`:''} ✓ – vào bài và chọn "Chỉnh mốc" để kiểm tra các câu. `+(note||'');
@@ -359,7 +374,15 @@ $('save').onclick=async()=>{
 const WM={tiny:'Xenova/whisper-tiny',base:'Xenova/whisper-base',small:'Xenova/whisper-small'};
 let asr=null,asrKey='';
 const wkey=()=>{try{const k=localStorage.getItem('wmodel');return WM[k]?k:'base'}catch(e){return 'base'}};
-const normW=s=>(s||'').toLowerCase().normalize('NFC').replace(/[^\p{L}\p{N}]/gu,'');
+/* "12" trong script và "zwölf" Whisper nghe được sẽ khớp nhau */
+const D1=['null','eins','zwei','drei','vier','fünf','sechs','sieben','acht','neun','zehn','elf','zwölf','dreizehn','vierzehn','fünfzehn','sechzehn','siebzehn','achtzehn','neunzehn'],D10=['','','zwanzig','dreißig','vierzig','fünfzig','sechzig','siebzig','achtzig','neunzig'];
+function deNum(n){
+  if(n<20)return D1[n];
+  if(n<100){const u=n%10,t=D10[Math.floor(n/10)];return u?(u===1?'ein':D1[u])+'und'+t:t}
+  if(n<1000){const h=Math.floor(n/100),r=n%100;return (h===1?'ein':D1[h])+'hundert'+(r?deNum(r):'')}
+  const t=Math.floor(n/1000),r=n%1000;return (t===1?'ein':deNum(t))+'tausend'+(r?deNum(r):'')}
+const normW=s=>{const w=(s||'').toLowerCase().normalize('NFC').replace(/[^\p{L}\p{N}]/gu,'');
+  return /^\d{1,6}$/.test(w)&&!(w.length>1&&w[0]==='0')?deNum(+w):w};
 const toks=l=>l.split(/[\s\-–—]+/).map(normW).filter(Boolean);
 function lev(a,b){const n=a.length,m=b.length;let p=Array.from({length:m+1},(_,j)=>j);
   for(let i=1;i<=n;i++){const c=[i];for(let j=1;j<=m;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[m]}
@@ -381,10 +404,11 @@ function alignLines(ls,words,dur){
   const mt=new Int32Array(n).fill(-1);
   for(let i=n,j=m;i>0||j>0;){const b=bk[i*W+j];
     if(i>0&&j>0&&b===0){if(sim(S[i-1],words[j-1].t)>=.5)mt[i-1]=j-1;i--;j--}else if(i>0&&(b===1||j===0))i--;else j--}
-  const st=Array(N).fill(null),cnt=Array(N).fill(0);let hit=0;
-  for(let k=0;k<n;k++){const i=own[k];cnt[i]++;if(mt[k]>=0){hit++;const w=words[mt[k]];
+  const st=Array(N).fill(null),cnt=Array(N).fill(0),mh=Array(N).fill(0);let hit=0;
+  for(let k=0;k<n;k++){const i=own[k];cnt[i]++;if(mt[k]>=0){hit++;mh[i]++;const w=words[mt[k]];
     st[i]=st[i]?[Math.min(st[i][0],w.s),Math.max(st[i][1],w.e)]:[w.s,w.e]}}
   if(hit<n*.3)return null;
+  const conf=cnt.map((c,i)=>c?mh[i]/c:1);
   /* dòng không khớp được từ nào: chia đều theo số từ trong khoảng giữa hai dòng đã biết */
   for(let i=0;i<N;){if(st[i]){i++;continue}
     let j=i;while(j<N&&!st[j])j++;
@@ -392,7 +416,7 @@ function alignLines(ls,words,dur){
     const tw=cnt.slice(i,j).reduce((x,y)=>x+y+1,0);let t=a;
     for(let k=i;k<j;k++){const d=Math.max(b-a,.1)*(cnt[k]+1)/tw;st[k]=[t,t+d];t+=d}
     i=j}
-  return st;
+  st.conf=conf;return st;
 }
 /* parts: [[s,e]] từng dòng; eng: {r:Float32Array năng lượng mỗi 10ms} dùng để chọn đúng chỗ lặng nhất giữa hai dòng */
 function buildSegs(parts,dur,eng){
@@ -444,41 +468,55 @@ async function to16k(blob){
   src.buffer=buf;src.connect(oc.destination);src.start();
   return (await oc.startRendering()).getChannelData(0);
 }
+/* bỏ các quãng im lặng dài (>1s) trước khi đưa cho Whisper: ít chunk hơn => nhanh hơn, ít "ảo giác" hơn. map() đổi mốc thời gian về audio gốc */
+function squeezeSilence(a,eng){
+  const so=Float32Array.from(eng).sort(),p95=Math.max(so[Math.floor(so.length*.95)],1e-6),th=p95*.05,MINRUN=100,KEEP=25,n=eng.length,cuts=[];
+  for(let i=0;i<n;){if(eng[i]<th){let j=i;while(j<n&&eng[j]<th)j++;if(j-i>=MINRUN)cuts.push([i+KEEP,j-KEEP]);i=j}else i++}
+  if(!cuts.length)return {audio:a,map:t=>t,removed:0};
+  let tot=0;cuts.forEach(c=>tot+=c[1]-c[0]);
+  const out=new Float32Array(a.length-tot*160);let o=0,p=0;
+  cuts.forEach(c=>{const s=c[0]*160,e=c[1]*160;out.set(a.subarray(p,s),o);o+=s-p;p=e});out.set(a.subarray(p),o);
+  const rs=[],rm=[];let cum=0;cuts.forEach(c=>{rs.push(c[0]*.01-cum);cum+=(c[1]-c[0])*.01;rm.push(cum)});
+  const map=(t,end)=>{let add=0;for(let k=0;k<rs.length;k++){if(end?t>rs[k]:t>=rs[k])add=rm[k];else break}return t+add};
+  return {audio:out,map,removed:cum};
+}
 async function whisperSplit(blob,ls,say,cached){
   say('Đang đọc audio…');const a=await to16k(blob),dur=a.length/16000;
+  const fr=160,nf=Math.floor(a.length/fr),eng=new Float32Array(nf);
+  for(let i=0;i<nf;i++){let s=0;for(let k=0;k<fr;k++){const v=a[i*fr+k];s+=v*v}eng[i]=Math.sqrt(s/fr)}
   let words=cached,parts=null;
   if(words)parts=alignLines(ls,words,dur);          /* đã có từ Whisper nghe sẵn => đối chiếu lại tức thì */
   if(!parts){
-    const chunks=await runWhisper(a,wkey(),say);
-    words=chunks.filter(c=>c.timestamp&&c.timestamp[0]!=null)
-      .map(c=>({t:normW(c.text),s:c.timestamp[0],e:c.timestamp[1]==null?Math.min(dur,c.timestamp[0]+.4):c.timestamp[1]})).filter(w=>w.t);
+    const sq=squeezeSilence(a,eng);
+    const chunks=await runWhisper(sq.audio,wkey(),say);
+    words=chunks.filter(c=>c.timestamp&&c.timestamp[0]!=null).map(c=>{
+      const s0=c.timestamp[0],e0=c.timestamp[1]==null?s0+.4:c.timestamp[1];
+      return {t:normW(c.text),s:sq.map(s0),e:Math.min(dur,sq.map(e0,true))}}).filter(w=>w.t);
     say('Đang đối chiếu với script…');await new Promise(r=>setTimeout(r,0));
     parts=alignLines(ls,words,dur)}
   if(!parts)return null;
-  const fr=160,nf=Math.floor(a.length/fr),eng=new Float32Array(nf);
-  for(let i=0;i<nf;i++){let s=0;for(let k=0;k<fr;k++){const v=a[i*fr+k];s+=v*v}eng[i]=Math.sqrt(s/fr)}
-  return {segs:buildSegs(parts,dur,eng),words};
+  return {segs:buildSegs(parts,dur,eng),words,conf:parts.conf};
 }
-/* dùng Whisper nếu được, lỗi thì quay về cách dò khoảng lặng. Trả về [segs, ghiChú, words] */
+/* dùng Whisper nếu được, lỗi thì quay về cách dò khoảng lặng. Trả về [segs, ghiChú, words, conf] */
 async function smartSplit(blob,ls,say,useW,cached){
   let note='';
   if(useW){
-    try{const r=await whisperSplit(blob,ls,say,cached);if(r)return [r.segs,'',r.words];note='Whisper nghe không khớp script nên đã dùng cách dò khoảng lặng.'}
+    try{const r=await whisperSplit(blob,ls,say,cached);if(r)return [r.segs,'',r.words,r.conf];note='Whisper nghe không khớp script nên đã dùng cách dò khoảng lặng.'}
     catch(e){console.error(e);note='Không chạy được Whisper (cần mạng ở lần đầu): '+(e&&e.message||e)+' → đã dùng cách dò khoảng lặng.'}
   }
   say('Đang tách audio…');
-  return [await detect(blob,ls.length,ls),note,null];
+  return [await detect(blob,ls.length,ls),note,null,null];
 }
 /* editor */
-function openEditor(){setAudio(cur.audio);$('et').textContent=head();$('ebook').value=cur.book||'';$('etitle').value=cur.title;$('escript').value=cur.script;$('etrans').value=cur.trans||'';$('emsg').textContent='';drawSegs(getLines(cur.script),cur.segs);show('vEdit')}
-function drawSegs(ls,sg){$('segs').innerHTML=ls.map((l,i)=>`<div class="seg"><span class="mu">${i+1}</span><span class="tt">${esc(l)}</span><input type="number" step="0.05" min="0" value="${sg[i][0]}"><input type="number" step="0.05" min="0" value="${sg[i][1]}"><button class="sbtn" data-p="${i}">▶</button></div>`).join('')}
+function openEditor(){setAudio(cur.audio);$('et').textContent=head();$('ebook').value=cur.book||'';$('etitle').value=cur.title;$('escript').value=cur.script;$('etrans').value=cur.trans||'';$('emsg').textContent='';drawSegs(getLines(cur.script),cur.segs,cur.conf);show('vEdit')}
+function drawSegs(ls,sg,cf){const ok=cf&&cf.length===ls.length;$('segs').innerHTML=ls.map((l,i)=>{const w=ok&&cf[i]<.6;return `<div class="seg${w?' warn':''}"${w?' title="Whisper nghe không chắc dòng này – hãy bấm ▶ nghe thử và chỉnh mốc nếu lệch"':''}><span class="mu">${i+1}</span><span class="tt">${w?'⚠ ':''}${esc(l)}</span><input type="number" step="0.05" min="0" value="${sg[i][0]}"><input type="number" step="0.05" min="0" value="${sg[i][1]}"><button class="sbtn" data-p="${i}">▶</button></div>`}).join('')}
 const readSegs=()=>[...$('segs').children].map(r=>{const n=r.querySelectorAll('input');return[+n[0].value,+n[1].value]});
 $('segs').onclick=e=>{const p=e.target.dataset.p;if(p!==undefined){const s=readSegs()[p];playRange(s[0],s[1])}};
-$('eauto').onclick=async()=>{const ls=getLines($('escript').value);if(!ls.length)return;$('emsg').textContent='Đang tách…';cur.segs=await detect(cur.audio,ls.length,ls);drawSegs(ls,cur.segs);$('emsg').textContent=''};
+$('eauto').onclick=async()=>{const ls=getLines($('escript').value);if(!ls.length)return;$('emsg').textContent='Đang tách…';cur.segs=await detect(cur.audio,ls.length,ls);cur.conf=null;drawSegs(ls,cur.segs);$('emsg').textContent=''};
 $('ewh').onclick=async()=>{const ls=getLines($('escript').value);if(!ls.length)return;
   const b=$('ewh');b.disabled=true;
-  try{const same=cur.words&&cur.wmodel===wkey();
-    const [sg,note,wd]=await smartSplit(cur.audio,ls,m=>{$('emsg').textContent=m},true,same?cur.words:null);cur.segs=sg;if(wd){cur.words=wd;cur.wmodel=wkey()}drawSegs(ls,sg);$('emsg').textContent=note||'Đã tách bằng Whisper ✓ – bấm ▶ để nghe thử rồi Lưu.'}
+  try{const same=cur.words&&cur.wver===2&&cur.wmodel===wkey();
+    const [sg,note,wd,cn]=await smartSplit(cur.audio,ls,m=>{$('emsg').textContent=m},true,same?cur.words:null);cur.segs=sg;if(wd){cur.words=wd;cur.wmodel=wkey();cur.wver=2}cur.conf=cn||null;drawSegs(ls,sg,cur.conf);$('emsg').textContent=note||'Đã tách bằng Whisper ✓ – bấm ▶ để nghe thử rồi Lưu.'}
   catch(e){$('emsg').textContent='Lỗi: '+(e&&e.message||e)}
   b.disabled=false};
 ['wm','wm2'].forEach(id=>{const el=$(id);el.value=wkey();el.onchange=()=>{try{localStorage.setItem('wmodel',el.value)}catch(e){}$('wm').value=$('wm2').value=el.value;if($('vAdd')&&!$('vAdd').classList.contains('hide')&&pend.length)preloadWhisper()}});
@@ -489,7 +527,7 @@ $('eback').onclick=()=>show('vMode');
 /* listen & type */
 function startPractice(){setAudio(cur.audio);lines=getLines(cur.script);segs=cur.segs;idx=0;good=0;
   $('ttl').textContent='Advanced Dictation / '+head();$('pdone').classList.add('hide');$('pmain').classList.remove('hide');show('vType');go(0)}
-function go(i){idx=i;tries=0;$('ans').value='';$('fb').textContent='';$('fb').className='fb';
+function go(i){idx=i;tries=0;force=null;$('ans').readOnly=false;$('ans').value='';paint();
   if(idx>=lines.length){$('pmain').classList.add('hide');$('pdone').classList.remove('hide');$('sc').textContent=good+' / '+lines.length;return}
   $('cnt').textContent=`${idx+1}/${lines.length}`;$('ans').focus();replay()}
 function replay(){const s=segs[idx];if(s)playRange(s[0],s[1])}
@@ -500,19 +538,44 @@ function mask(t,u){const n=t.length,m=u.length,L=Array.from({length:n+1},()=>new
   let i=0,j=0,o='';
   while(i<n){if(j<m&&eq(t[i],u[j])){o+=t[i];i++;j++}else if(j<m&&L[i][j+1]>L[i+1][j])j++;else{o+=t[i]===' '?' ':'*';i++}}
   return o}
-function check(){const u=$('ans').value.replace(/\s+/g,' ').trim();if(!u){replay();return}
-  const t=target(idx),fb=$('fb');tries++;
-  if(eq(t,u)){if(tries===1)good++;fb.textContent='✓ '+lines[idx];fb.className='fb ok';setTimeout(()=>go(idx+1),700)}
-  else{fb.textContent=mask(t,u);fb.className='fb no'}}
-$('ans').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();check()}});
+/* hiển thị: 1 khung duy nhất. textarea trong suốt nằm đè lên lớp #bd tô màu (xanh = đúng, đỏ = sai/thiếu) */
+let force=null; /* 'ok' = cả câu xanh, 'no' = cả câu đỏ (xem đáp án), null = tô theo từng ký tự */
+const PUN=/[.,;:!?„“"”»«()\-–—…]/;
+function matchedChars(t,v){
+  const idxs=[],res=new Array(v.length).fill(0);
+  for(let k=0;k<v.length;k++){if(pnOn&&PUN.test(v[k]))res[k]=2;else idxs.push(k)}
+  const u=idxs.map(k=>v[k]),n=t.length,m=u.length,L=Array.from({length:n+1},()=>new Int16Array(m+1));
+  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)L[i][j]=eq(t[i],u[j])?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
+  let i=0,j=0;while(i<n&&j<m){if(eq(t[i],u[j])){res[idxs[j]]=1;i++;j++}else if(L[i+1][j]>=L[i][j+1])i++;else j++}
+  return res}
+function paint(){
+  const ta=$('ans'),bd=$('bd'),v=ta.value;let h='';
+  if(force)h=`<span class="${force==='ok'?'g':'r'}">${esc(v)}</span>`;
+  else if(idx<lines.length&&v){const m=matchedChars(target(idx),v);
+    for(let k=0;k<v.length;k++){const c=esc(v[k]);h+=m[k]===1?`<span class="g">${c}</span>`:(m[k]===0&&tries>0)?`<span class="r">${c}</span>`:c}}
+  else h=esc(v);
+  bd.innerHTML=h+(v===''||v.endsWith('\n')?' ':'');bd.scrollTop=ta.scrollTop}
+const cleanAns=v=>{let u=v.replace(/\*/g,'');if(pnOn)u=u.replace(/[.,;:!?„“"”»«()\-–—…]/g,'');return u.replace(/\s+/g,' ').trim()};
+function check(){const ta=$('ans'),u=cleanAns(ta.value);if(!u){replay();return}
+  const t=target(idx);tries++;
+  if(eq(t,u)){if(tries===1)good++;force='ok';ta.value=lines[idx];ta.readOnly=true;paint();setTimeout(()=>go(idx+1),700)}
+  else{force=null;ta.value=mask(t,u);const p=ta.value.indexOf('*');paint();ta.focus();if(p>=0)ta.setSelectionRange(p,p)}}
+$('ans').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();check();return}
+  /* đang hiện đáp án (đỏ): gõ phím nào thì xoá đáp án đi để gõ lại từ đầu */
+  if(force==='no'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!['Control','Shift','Alt','Meta','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key)){$('ans').value='';force=null;paint()}});
+/* gõ đè lên dấu * : mỗi ký tự gõ vào sẽ thay đúng 1 dấu * ngay sau con trỏ */
+$('ans').addEventListener('input',e=>{const ta=$('ans');if(/[\r\n]/.test(ta.value)){const q=ta.selectionStart;ta.value=ta.value.replace(/[\r\n]+/g,' ');ta.setSelectionRange(q,q)}const p=ta.selectionStart;
+  if(e.inputType==='insertText'&&ta.value[p]==='*'){ta.value=ta.value.slice(0,p)+ta.value.slice(p+1);ta.setSelectionRange(p,p)}
+  force=null;paint()});
+$('ans').addEventListener('scroll',()=>{$('bd').scrollTop=$('ans').scrollTop});
 document.addEventListener('keydown',e=>{if(e.key==='Control'&&!e.repeat&&!$('vType').classList.contains('hide')&&idx<lines.length){e.preventDefault();replay()}});
 $('chk').onclick=check;$('skip').onclick=()=>go(idx+1);$('prev').onclick=()=>{if(idx>0)go(idx-1)};
-$('reveal').onclick=()=>{tries=2;$('fb').textContent=lines[idx];$('fb').className='fb no';$('ans').focus()};
-$('cs').onclick=e=>{csOn=!csOn;e.target.classList.toggle('on',csOn);e.target.textContent='Hoa/thường: '+(csOn?'có':'không')};
-$('pn').onclick=e=>{pnOn=!pnOn;e.target.classList.toggle('on',pnOn);e.target.textContent='Bỏ dấu câu: '+(pnOn?'có':'không')};
+$('reveal').onclick=()=>{tries=2;force='no';$('ans').value=lines[idx];paint();$('ans').focus()};
+$('cs').onclick=e=>{csOn=!csOn;e.target.classList.toggle('on',csOn);e.target.textContent='Hoa/thường: '+(csOn?'có':'không');paint()};
+$('pn').onclick=e=>{pnOn=!pnOn;e.target.classList.toggle('on',pnOn);e.target.textContent='Bỏ dấu câu: '+(pnOn?'có':'không');paint()};
 $('again').onclick=startPractice;$('pback').onclick=()=>show('vMode');
 document.querySelector('.tools').addEventListener('mousedown',e=>e.preventDefault());
-document.querySelector('.tools').onclick=e=>{const c=e.target.dataset.c;if(!c)return;const a=$('ans'),s=a.selectionStart,t=a.selectionEnd;a.value=a.value.slice(0,s)+c+a.value.slice(t);a.focus();a.selectionStart=a.selectionEnd=s+1};
+document.querySelector('.tools').onclick=e=>{const c=e.target.dataset.c;if(!c)return;const a=$('ans'),s=a.selectionStart,t=a.selectionEnd;a.value=a.value.slice(0,s)+c+a.value.slice(t);force=null;paint();a.focus();a.selectionStart=a.selectionEnd=s+1};
 /* listen & read */
 function startRead(){setAudio(cur.audio);lines=getLines(cur.script);segs=cur.segs;trs=getLines(cur.trans);$('rtl').textContent='Advanced Dictation / '+head();
   $('tl').innerHTML=lines.map((l,i)=>`<div class="l" data-i="${i}"><button data-p="${i}">▷</button><div><span class="x">${esc(l)}</span><i class="tr2">${esc(trs[i]||'')}</i></div></div>`).join('');
