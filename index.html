@@ -25,6 +25,7 @@ h3{font-size:22px;margin:0 0 18px}
 .col{max-width:690px}.col.w{max-width:640px}
 .acc{margin-bottom:18px}.ah{background:var(--g);border-radius:18px;padding:22px 30px;font-size:24px;display:flex;justify-content:space-between;cursor:pointer;border:1px solid transparent}
 .acc.open .ah{border-color:var(--gr)}.ah span{transition:.2s}.acc.open .ah span{transform:rotate(180deg)}
+.nm{flex:1;font-style:normal}.ed{font-size:18px;font-weight:400;margin:0 18px;color:var(--gr);padding:0 6px}.ed:hover{background:var(--sel);border-radius:6px}
 .ab{display:none;padding-top:14px}.acc.open .ab{display:block}
 .pill,.mode{background:var(--g);border-radius:16px;padding:16px 30px;margin-bottom:12px;cursor:pointer;border:1px solid transparent;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill small{display:block;color:var(--mu);font-size:12px}
@@ -35,8 +36,8 @@ h3{font-size:22px;margin:0 0 18px}
 .sw{position:relative}.menu{position:absolute;right:-8px;top:34px;background:var(--bg);box-shadow:var(--sh);border-radius:14px;z-index:9;padding:6px 0;width:90px;max-height:300px;overflow:auto}
 .menu div{padding:8px 18px;cursor:pointer;font-size:15px}.menu .sel{background:var(--sel)}
 .box{border:1px solid var(--bd);border-radius:16px;margin-top:16px;background:var(--bg)}
-.box textarea{width:100%;min-height:220px;border:0;background:transparent;color:var(--tx);font:17px/1.6 inherit;padding:18px;resize:vertical;outline:0}
-.fb{padding:0 18px 18px;font:19px/1.6 "Courier New",monospace;white-space:pre-wrap;word-break:break-word;min-height:8px}.fb.no{color:var(--bad)}.fb.ok{color:var(--gr)}
+.box textarea{width:100%;min-height:200px;border:0;background:transparent;color:var(--tx);font:17px/1.6 inherit;padding:18px;resize:vertical;outline:0}
+.fb{padding:18px 18px 0;font:17px/1.6 inherit;letter-spacing:1px;white-space:pre-wrap;word-break:break-word}.fb:empty{padding:0}.fb.no{color:var(--bad)}.fb.ok{color:var(--gr)}
 .cnt{text-align:right;margin:14px 0}
 .btns{display:flex;justify-content:space-between;gap:20px}
 .btn{border:0;border-radius:12px;padding:17px 0;font:600 16px system-ui,sans-serif;cursor:pointer;width:42%}
@@ -76,7 +77,7 @@ h3{font-size:22px;margin:0 0 18px}
  <div class="th"><h1>Intensive Listening / Advanced Dictation</h1></div>
  <h3 id="mt"></h3>
  <div class="col"><div class="mode" data-m="type">Practice: Listen and Type</div><div class="mode" data-m="read">Practice: Listen and Read</div>
- <div class="row"><button class="sbtn" id="mback">← Danh sách</button><button class="sbtn" id="medit">Chỉnh mốc & script</button><button class="sbtn" id="mdel">Xoá bài</button></div></div>
+ <div class="row"><button class="sbtn" id="mback">← Danh sách</button><button class="sbtn" id="medit">Sửa bài (tên, script, mốc)</button><button class="sbtn" id="mdel">Xoá bài</button></div></div>
 </div>
 
 <div id="vType" class="hide">
@@ -84,7 +85,7 @@ h3{font-size:22px;margin:0 0 18px}
  <h3>Practice: Listen and Type</h3>
  <div class="col w"><div class="bar" id="bar1"></div>
  <div id="pmain">
-  <div class="box"><textarea id="ans" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="Type what you hear"></textarea><div class="fb" id="fb"></div></div>
+  <div class="box"><div class="fb" id="fb"></div><textarea id="ans" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="Type what you hear"></textarea></div>
   <div class="cnt" id="cnt"></div>
   <div class="btns"><button class="btn b1" id="chk">Check</button><button class="btn b2" id="skip">Next</button></div>
   <div class="tools"><button class="sm" data-c="ä">ä</button><button class="sm" data-c="ö">ö</button><button class="sm" data-c="ü">ü</button><button class="sm" data-c="ß">ß</button><button class="sm" data-c="Ä">Ä</button><button class="sm" data-c="Ö">Ö</button><button class="sm" data-c="Ü">Ü</button><br>
@@ -111,7 +112,7 @@ h3{font-size:22px;margin:0 0 18px}
   <label>Sách / giáo trình</label><input type="text" id="book" placeholder="VD: Netzwerk A1">
   <label>Tên bài</label><input type="text" id="title" placeholder="VD: Kapitel 1 – Track 02">
   <label>File audio</label><input type="file" id="file" accept="audio/*">
-  <label>Script – mỗi câu 1 dòng (web tự tách audio theo số dòng)</label><textarea id="script" placeholder="Wie geht's?&#10;Gut, danke. Und dir?"></textarea>
+  <label>Script – mỗi câu 1 dòng, hoặc mỗi đoạn cách nhau 1 dòng trống (web tách audio theo số câu/đoạn)</label><textarea id="script" placeholder="Wie geht's?&#10;Gut, danke. Und dir?"></textarea>
   <label>Bản dịch tiếng Việt – mỗi câu 1 dòng, cùng thứ tự (không bắt buộc)</label><textarea id="trans"></textarea>
   <div class="row"><button class="sbtn p" id="save">Lưu & tự tách câu</button><span class="mu" id="msg"></span></div>
  </div>
@@ -120,6 +121,7 @@ h3{font-size:22px;margin:0 0 18px}
 <div id="vEdit" class="hide">
  <div class="th"><h1 id="et"></h1></div>
  <div class="card">
+  <label>Sách / học phần</label><input type="text" id="ebook"><label>Tên bài</label><input type="text" id="etitle">
   <label>Script (mỗi câu 1 dòng)</label><textarea id="escript"></textarea>
   <label>Bản dịch tiếng Việt (mỗi câu 1 dòng)</label><textarea id="etrans"></textarea>
   <div class="row"><button class="sbtn" id="eauto">Tự tách lại theo số dòng</button><button class="sbtn p" id="esave">Lưu</button><button class="sbtn" id="eback">← Quay lại</button><span class="mu" id="emsg"></span></div>
@@ -132,8 +134,10 @@ h3{font-size:22px;margin:0 0 18px}
 const $=id=>document.getElementById(id);
 let mem=[],db=null,cur=null,url=null,ctx=null,lines=[],trs=[],segs=[],idx=0,tries=0,good=0,timer=null,rate=1,muted=false,showTr=false,ridx=-1,csOn=true,pnOn=true;
 const A=new Audio(),R=new Audio();
-const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-const getLines=s=>(s||'').split(/\n/).map(x=>x.trim()).filter(Boolean);
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const getLines=s=>{s=(s||'').replace(/\r/g,'').trim();
+  if(/\n[ \t]*\n/.test(s))return s.split(/\n[ \t]*\n/).map(b=>b.split('\n').map(x=>x.trim()).filter(Boolean).join(' ')).filter(Boolean);
+  return s.split('\n').map(x=>x.trim()).filter(Boolean)};
 /* storage */
 function openDB(){return new Promise(r=>{try{const q=indexedDB.open('diktat',1);q.onupgradeneeded=()=>q.result.createObjectStore('l',{keyPath:'id'});q.onsuccess=()=>r(q.result);q.onerror=()=>r(null)}catch(e){r(null)}})}
 const all=()=>new Promise(r=>{if(!db)return r(mem);try{const q=db.transaction('l').objectStore('l').getAll();q.onsuccess=()=>r(q.result);q.onerror=()=>r(mem)}catch(e){r(mem)}});
@@ -196,10 +200,14 @@ async function render(){
   const ls=(await all()).sort((a,b)=>a.id-b.id).filter(l=>!q||(l.title+' '+(l.book||'')).toLowerCase().includes(q));
   $('empty').classList.toggle('hide',ls.length>0);
   const g={};ls.forEach(l=>(g[l.book||'Khác']=g[l.book||'Khác']||[]).push(l));
-  $('list').innerHTML=Object.keys(g).map(k=>`<div class="acc ${openB.has(k)||q?'open':''}"><div class="ah" data-k="${esc(k)}">${esc(k)}<span>⌄</span></div><div class="ab">`+g[k].map(l=>`<div class="pill" data-id="${l.id}">${esc(l.title)}</div>`).join('')+'</div></div>').join('');
+  $('list').innerHTML=Object.keys(g).map(k=>`<div class="acc ${openB.has(k)||q?'open':''}"><div class="ah" data-k="${esc(k)}"><em class="nm">${esc(k)}</em><b class="ed" data-k="${esc(k)}" title="Đổi tên học phần">✎ Đổi tên</b><span>⌄</span></div><div class="ab">`+g[k].map(l=>`<div class="pill" data-id="${l.id}">${esc(l.title)}</div>`).join('')+'</div></div>').join('');
 }
 $('q').oninput=render;
 $('list').onclick=async e=>{
+  const rn=e.target.closest('.ed');
+  if(rn){const k=rn.dataset.k,nv=prompt('Đổi tên học phần:',k==='Khác'?'':k);
+    if(nv&&nv.trim()){const nn=nv.trim();for(const l of await all())if((l.book||'Khác')===k){l.book=nn;await put(l)}
+      if(openB.has(k)){openB.delete(k);openB.add(nn)}render()}return}
   const ah=e.target.closest('.ah'),pl=e.target.closest('.pill');
   if(ah){const k=ah.dataset.k;openB.has(k)?openB.delete(k):openB.add(k);ah.parentNode.classList.toggle('open')}
   if(pl){cur=(await all()).find(x=>x.id==pl.dataset.id);$('mt').textContent=(cur.book?cur.book+' - ':'')+cur.title;show('vMode')}
@@ -221,14 +229,14 @@ $('save').onclick=async()=>{
   }catch(e){$('msg').textContent='Không đọc được file audio này.'}
 };
 /* editor */
-function openEditor(){setAudio(cur.audio);$('et').textContent=head();$('escript').value=cur.script;$('etrans').value=cur.trans||'';$('emsg').textContent='';drawSegs(getLines(cur.script),cur.segs);show('vEdit')}
+function openEditor(){setAudio(cur.audio);$('et').textContent=head();$('ebook').value=cur.book||'';$('etitle').value=cur.title;$('escript').value=cur.script;$('etrans').value=cur.trans||'';$('emsg').textContent='';drawSegs(getLines(cur.script),cur.segs);show('vEdit')}
 function drawSegs(ls,sg){$('segs').innerHTML=ls.map((l,i)=>`<div class="seg"><span class="mu">${i+1}</span><span class="tt">${esc(l)}</span><input type="number" step="0.05" min="0" value="${sg[i][0]}"><input type="number" step="0.05" min="0" value="${sg[i][1]}"><button class="sbtn" data-p="${i}">▶</button></div>`).join('')}
 const readSegs=()=>[...$('segs').children].map(r=>{const n=r.querySelectorAll('input');return[+n[0].value,+n[1].value]});
 $('segs').onclick=e=>{const p=e.target.dataset.p;if(p!==undefined){const s=readSegs()[p];playRange(s[0],s[1])}};
 $('eauto').onclick=async()=>{const ls=getLines($('escript').value);if(!ls.length)return;$('emsg').textContent='Đang tách…';cur.segs=await detect(cur.audio,ls.length);drawSegs(ls,cur.segs);$('emsg').textContent=''};
 $('esave').onclick=async()=>{const ls=getLines($('escript').value),sg=readSegs();
   if(sg.length!==ls.length){$('emsg').textContent='Số dòng đã đổi – bấm "Tự tách lại" trước.';return}
-  cur.script=$('escript').value.trim();cur.trans=$('etrans').value.trim();cur.segs=sg;await put(cur);$('emsg').textContent='Đã lưu ✓';render()};
+  cur.book=$('ebook').value.trim();cur.title=$('etitle').value.trim()||cur.title;$('et').textContent=head();$('mt').textContent=head();cur.script=$('escript').value.trim();cur.trans=$('etrans').value.trim();cur.segs=sg;await put(cur);$('emsg').textContent='Đã lưu ✓';render()};
 $('eback').onclick=()=>show('vMode');
 /* listen & type */
 function startPractice(){setAudio(cur.audio);lines=getLines(cur.script);segs=cur.segs;idx=0;good=0;
