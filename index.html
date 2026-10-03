@@ -161,13 +161,13 @@ html{scroll-behavior:smooth}
   <div id="fsum" class="mu"></div>
   <div id="sTitle"><label>Tên bài</label><input type="text" id="title" placeholder="VD: Kapitel 1 – Track 02"></div>
   <div id="sBody">
-  <label>Script – mỗi câu 1 dòng, hoặc mỗi đoạn cách nhau 1 dòng trống (web tách audio theo số câu/đoạn)</label><textarea id="script" placeholder="Wie geht's?&#10;Gut, danke. Und dir?"></textarea>
+  <label>Script – mỗi câu 1 dòng, hoặc mỗi đoạn cách nhau 1 dòng trống (web tách audio theo số câu/đoạn). Chưa có script thì bấm "Whisper tự viết script" ở dưới.</label><textarea id="script" placeholder="Wie geht's?&#10;Gut, danke. Und dir?"></textarea>
   <label>Bản dịch tiếng Việt – mỗi câu 1 dòng, cùng thứ tự (không bắt buộc)</label><textarea id="trans"></textarea>
   </div>
   <div id="multi" class="hide"></div>
   <label style="display:flex;gap:8px;align-items:center;color:var(--tx)"><input type="checkbox" id="wchk" checked> Dùng Whisper (nhận diện giọng nói) để tách câu chính xác hơn</label>
   <label>Mô hình Whisper – lần đầu phải tải về, cần mạng</label><select id="wm" class="wmsel"><option value="tiny">tiny (nhẹ nhất – cho máy yếu)</option><option value="base">base (cân bằng – máy trung bình)</option><option value="small">small (chính xác nhất – nên dùng khi có GPU)</option></select>
-  <div class="row"><button class="sbtn p" id="save">Lưu & tự tách câu</button><span class="mu" id="msg"></span><button class="sbtn hide" id="wskip1">Bỏ qua Whisper</button></div>
+  <div class="row"><button class="sbtn" id="wtx">✍ Whisper tự viết script</button><button class="sbtn p" id="save">Lưu & tự tách câu</button><span class="mu" id="msg"></span><button class="sbtn hide" id="wskip1">Bỏ qua Whisper</button></div>
  </div>
 </div>
 
@@ -459,8 +459,9 @@ async function mergeAudio(files,say){
 }
 const commonTitle=names=>{let p=names[0];for(const n of names)while(p&&!n.startsWith(p))p=p.slice(0,-1);
   p=p.replace(/[\s\-_.()0-9]+$/,'').trim();return p.length>=3?p:names[0]};
+let pendBlob=null,pendWords=null;
 $('file').onchange=async()=>{
-  preloadWhisper();
+  pendBlob=pendWords=null;preloadWhisper();
   const fs=[...$('file').files],nat=(a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true});
   const au=fs.filter(isAud).sort(nat),tx=fs.filter(f=>/\.txt$/i.test(f.name)).sort(nat);
   const rd=async f=>f?(await f.text()).replace(/^\uFEFF/,'').trim():'';
@@ -488,12 +489,12 @@ $('save').onclick=async()=>{
   if(!title||!script){$('msg').textContent='Cần đủ tên bài, audio và script.';return}
   const btn=$('save');btn.disabled=true;
   try{
-    let blob=pend[0].file;
-    if(pend.length>1)blob=await mergeAudio(pend.map(x=>x.file),m=>{$('msg').textContent=m});
-    const ls=getLines(script),[sg,note,wd,cn]=await smartSplit(blob,ls,m=>{$('msg').textContent=m},$('wchk').checked);
+    let blob=pendBlob||pend[0].file;
+    if(!pendBlob&&pend.length>1)blob=await mergeAudio(pend.map(x=>x.file),m=>{$('msg').textContent=m});
+    const ls=getLines(script),[sg,note,wd,cn]=await smartSplit(blob,ls,m=>{$('msg').textContent=m},$('wchk').checked||!!pendWords,pendWords);
     await put({id:Date.now(),title,book,sub,script,trans,audio:blob,segs:sg,words:wd||null,wmodel:wd?wkey():'',wver:2,conf:cn||null});
     const n=pend.length;
-    $('title').value=$('script').value=$('trans').value=$('file').value='';pend=[];$('fsum').textContent='';
+    $('title').value=$('script').value=$('trans').value=$('file').value='';pend=[];pendBlob=pendWords=null;$('fsum').textContent='';
     $('msg').textContent=`Đã lưu 1 bài${n>1?` (gộp từ ${n} file audio)`:''} ✓ – vào bài và chọn "Chỉnh mốc" để kiểm tra các câu. `+(note||'');
   }catch(e){console.error(e);$('msg').textContent='Lỗi: '+(e&&e.message||e)}
   btn.disabled=false;render();
@@ -539,9 +540,14 @@ function alignLines(ls,words,dur){
   const mt=new Int32Array(n).fill(-1);
   for(let i=n,j=m;i>0||j>0;){const b=bk[i*W+j];
     if(i>0&&j>0&&b===0){if(sim(S[i-1],words[j-1].t)>=.5)mt[i-1]=j-1;i--;j--}else if(i>0&&(b===1||j===0))i--;else j--}
-  const st=Array(N).fill(null),cnt=Array(N).fill(0),mh=Array(N).fill(0);let hit=0;
-  for(let k=0;k<n;k++){const i=own[k];cnt[i]++;if(mt[k]>=0){hit++;mh[i]++;const w=words[mt[k]];
-    st[i]=st[i]?[Math.min(st[i][0],w.s),Math.max(st[i][1],w.e)]:[w.s,w.e]}}
+  const st=Array(N).fill(null),cnt=Array(N).fill(0),mh=Array(N).fill(0),ms=Array.from({length:N},()=>[]);let hit=0;
+  for(let k=0;k<n;k++){const i=own[k];cnt[i]++;if(mt[k]>=0)ms[i].push(words[mt[k]])}
+  /* các từ của 1 dòng phải nằm gần nhau: nếu khớp rải rác (vd. chữ "Ja" khớp nhầm chỗ xa) thì chỉ giữ cụm đông nhất */
+  for(let i=0;i<N;i++){const w=ms[i].slice().sort((x,y)=>x.s-y.s);if(!w.length)continue;
+    let best=[],c=[w[0]];
+    for(let k=1;k<w.length;k++){if(w[k].s-c[c.length-1].e>3){if(c.length>best.length)best=c;c=[]}c.push(w[k])}
+    if(c.length>best.length)best=c;
+    mh[i]=best.length;hit+=best.length;st[i]=[Math.min(...best.map(x=>x.s)),Math.max(...best.map(x=>x.e))]}
   if(hit<n*.3)return null;
   const conf=cnt.map((c,i)=>c?mh[i]/c:1);
   /* dòng không khớp được từ nào: chia đều theo số từ trong khoảng giữa hai dòng đã biết */
@@ -621,6 +627,32 @@ function squeezeSilence(a,eng){
   const map=(t,end)=>{let add=0;for(let k=0;k<rs.length;k++){if(end?t>rs[k]:t>=rs[k])add=rm[k];else break}return t+add};
   return {audio:out,map,removed:cum};
 }
+/* dòng Whisper nghe không chắc (hoặc có thời lượng vô lý so với độ dài chữ) => bỏ mốc của Whisper, tách lại bằng khoảng lặng trong đoạn nằm giữa 2 dòng đáng tin */
+const textW=l=>{let w=0;for(const ch of l){if(/\d/.test(ch))w+=3;else if(/\p{L}/u.test(ch))w+=1}return w};
+function repairParts(parts,ls,eng,dur){
+  const N=parts.length,conf=parts.conf.slice(),out=parts.map(p=>p.slice());
+  const bad=ls.map((l,i)=>{const d=parts[i][1]-parts[i][0];return conf[i]<.6||d>2.5+textW(l)/5||d<.1});
+  if(!bad.some(Boolean)){return parts}
+  const so=Float32Array.from(eng).sort(),p95=Math.max(so[Math.floor(so.length*.95)],1e-6),th=Math.max(p95*.06,.002);
+  let first=0,last=eng.length-1;while(first<last&&eng[first]<=th)first++;while(last>first&&eng[last]<=th)last--;
+  const gapsIn=(a,b,t,minF)=>{const g=[],f0=Math.max(0,Math.floor(a*100)),f1=Math.min(eng.length-1,Math.floor(b*100));let gs=-1;
+    for(let f=f0;f<=f1;f++){if(eng[f]<=t){if(gs<0)gs=f}else if(gs>=0){if(f-gs>=minF)g.push({t:(gs+f)/2*.01,g:(f-gs)*.01});gs=-1}}return g};
+  for(let i=0;i<N;){if(!bad[i]){i++;continue}
+    let j=i;while(j<N&&bad[j])j++;
+    let a=i>0?out[i-1][1]:Math.max(0,first*.01-.1),b=j<N?out[j][0]:Math.min(dur,(last+1)*.01+.2);const rl=ls.slice(i,j),need=rl.length-1;
+    let a2=a,b2=b;  /* biên của đoạn nằm giữa từ cuối/đầu của dòng tốt, mà dòng tốt có thể bị thiếu chữ => lùi/tiến tới khoảng lặng gần nhất */
+    if(i>0){const g=gapsIn(a,Math.min(b,a+3),th,5);if(g.length)a2=g[0].t}
+    if(j<N){const g=gapsIn(Math.max(a,b-3),b,th,5);if(g.length)b2=g[g.length-1].t}
+    if(b2-a2>.25*rl.length){a=a2;b=b2}
+    if(b-a>.25*rl.length){
+      let cuts=[];
+      if(need>0){let c=gapsIn(a,b,th,5);if(c.length<need)c=gapsIn(a,b,th*3,3);if(c.length<need)c=gapsIn(a,b,th*8,2);
+        cuts=pickCuts(c,a,b,rl);
+        if(!cuts){const W=rl.map(l=>textW(l)+8),tw=W.reduce((x,y)=>x+y,0);let acc=0;cuts=[];for(let k=0;k<need;k++){acc+=W[k];cuts.push(a+(b-a)*acc/tw)}}}
+      const bd=[a,...cuts,b];
+      for(let k=i;k<j;k++){out[k]=[bd[k-i],bd[k-i+1]];conf[k]=Math.min(conf[k],.5)}}
+    i=j}
+  out.conf=conf;return out}
 async function whisperSplit(blob,ls,say,cached){
   say('Đang đọc audio…');const a=await to16k(blob),dur=a.length/16000;
   const fr=160,nf=Math.floor(a.length/fr),eng=new Float32Array(nf);
@@ -636,8 +668,35 @@ async function whisperSplit(blob,ls,say,cached){
     say('Đang đối chiếu với script…');await new Promise(r=>setTimeout(r,0));
     parts=alignLines(ls,words,dur)}
   if(!parts)return null;
+  parts=repairParts(parts,ls,eng,dur);
   return {segs:buildSegs(parts,dur,eng),words,conf:parts.conf};
 }
+/* Whisper tự viết script: nghe cả audio -> gom từ thành câu (theo dấu câu, quãng nghỉ dài, hoặc tối đa 25 từ) */
+async function whisperWords(blob,say){
+  say('Đang đọc audio…');const a=await to16k(blob),dur=a.length/16000;
+  const fr=160,nf=Math.floor(a.length/fr),eng=new Float32Array(nf);
+  for(let i=0;i<nf;i++){let s=0;for(let k=0;k<fr;k++){const v=a[i*fr+k];s+=v*v}eng[i]=Math.sqrt(s/fr)}
+  const sq=squeezeSilence(a,eng),chunks=await runWhisper(sq.audio,wkey(),say);
+  return chunks.filter(c=>c.timestamp&&c.timestamp[0]!=null).map(c=>{
+    const s0=c.timestamp[0],e0=c.timestamp[1]==null?s0+.4:c.timestamp[1];
+    return {t:normW(c.text),r:(c.text||'').trim(),s:sq.map(s0),e:Math.min(dur,sq.map(e0,true))}}).filter(w=>w.t)}
+function wordsToLines(ws){
+  const out=[];let cur=[];
+  ws.forEach((w,i)=>{cur.push(w.r||w.t);const nx=ws[i+1];
+    if(/[.!?…]["”“»«)]*$/.test(w.r||'')||!nx||nx.s-w.e>1.2||cur.length>=25){out.push(cur.join(' '));cur=[]}});
+  return out}
+$('wtx').onclick=async()=>{
+  const m=$('msg');if(!pend.length){m.textContent='Chọn file audio trước.';return}
+  if($('script').value.trim()&&!confirm('Script hiện tại sẽ bị thay bằng bản Whisper viết. Tiếp tục?'))return;
+  $('wtx').disabled=$('save').disabled=true;
+  try{let blob=pend[0].file;const say=t=>{m.textContent=t};
+    if(pend.length>1)blob=await mergeAudio(pend.map(x=>x.file),say);
+    const w=await whisperWords(blob,say);
+    if(!w.length)throw new Error('Whisper không nghe ra chữ nào');
+    const ls=wordsToLines(w);pendBlob=blob;pendWords=w;$('script').value=ls.join('\n');
+    m.textContent=`Whisper đã viết ${ls.length} dòng ✓ – hãy nghe lại và sửa chỗ sai (tên riêng, số, dấu câu) rồi bấm "Lưu & tự tách câu".`}
+  catch(e){console.error(e);m.textContent=e&&e.skip?'Đã bỏ qua Whisper.':'Lỗi: '+(e&&e.message||e)}
+  $('wtx').disabled=$('save').disabled=false};
 /* dùng Whisper nếu được, lỗi thì quay về cách dò khoảng lặng. Trả về [segs, ghiChú, words, conf] */
 async function smartSplit(blob,ls,say,useW,cached){
   let note='';
