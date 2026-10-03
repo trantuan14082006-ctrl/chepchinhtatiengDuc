@@ -28,7 +28,7 @@ h3{font-size:22px;margin:0 0 18px}
 .acc{margin-bottom:18px}.ah{background:var(--g);border-radius:18px;padding:22px 30px;font-size:24px;display:flex;justify-content:space-between;cursor:pointer;border:1px solid transparent}
 .acc.open .ah{border-color:var(--gr)}.ah span{transition:.2s}.acc.open .ah span{transform:rotate(180deg)}
 .nm{flex:1;font-style:normal}.ed{font-size:18px;font-weight:400;margin:0 18px;color:var(--tx);padding:0 6px}.ed:hover{background:var(--sel);border-radius:6px}
-.ab{display:none;padding-top:14px}.acc.open .ab{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}.subs{display:flex;flex-direction:column;gap:12px;width:250px;flex:none}.sub{background:var(--g);border-radius:16px;padding:16px 30px;cursor:pointer;border:1px solid transparent;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sub:hover,.sub.on{border-color:var(--gr)}.pl{flex:1;min-width:240px}.pl .pill{max-width:380px;white-space:normal}.acc.open.anim .ab{animation:vin .3s ease both}
+.abw{display:grid;grid-template-rows:0fr;transition:grid-template-rows .38s cubic-bezier(.2,.7,.2,1)}.acc.open .abw{grid-template-rows:1fr}.ab{overflow:hidden;min-height:0;visibility:hidden;transition:visibility 0s .38s}.acc.open .ab{visibility:visible;transition-delay:0s}.abi{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;padding:14px 6px 2px 0}.subs{display:flex;flex-direction:column;gap:12px;width:250px;flex:none}.sub{background:var(--g);border-radius:16px;padding:16px 30px;cursor:pointer;border:1px solid transparent;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sub:hover,.sub.on{border-color:var(--gr)}.pl{flex:1;min-width:240px}.pl .pill{max-width:380px;white-space:normal}
 .pill,.mode{background:var(--g);border-radius:16px;padding:16px 30px;margin-bottom:12px;cursor:pointer;border:1px solid transparent;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill small{display:block;color:var(--mu);font-size:12px}
 .mode{max-width:690px;font-size:20px;padding:18px 30px}.pill:hover,.mode:hover{border-color:var(--gr)}
@@ -76,7 +76,16 @@ h3{font-size:22px;margin:0 0 18px}
 .ah:hover,.pill:hover,.mode:hover{transform:translateX(4px)}
 .ah:active,.pill:active,.mode:active,.sbtn:active,.btn:active,.sm:active{transform:scale(.97)}
 .logo:hover b{transform:rotate(-6deg) scale(1.06)}
-@media(prefers-reduced-motion:reduce){.vin,.acc.open.anim .ab{animation:none}*{transition:none!important}}
+.pl.go .pill{animation:vin .35s cubic-bezier(.2,.7,.2,1) both}
+.pl.go .pill:nth-child(2){animation-delay:.04s}.pl.go .pill:nth-child(3){animation-delay:.08s}.pl.go .pill:nth-child(4){animation-delay:.12s}.pl.go .pill:nth-child(5){animation-delay:.16s}.pl.go .pill:nth-child(n+6){animation-delay:.2s}
+.ah span{transition:transform .35s cubic-bezier(.2,.7,.2,1)}
+.sub{transition:border-color .2s,background-color .2s,transform .2s}.sub:hover{transform:translateX(4px)}.sub:active{transform:scale(.97)}
+.btn:hover,.sbtn:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.12)}
+.btn:active,.sbtn:active{transform:scale(.97);box-shadow:none}
+.ah:hover,.sub:hover,.pill:hover,.mode:hover{box-shadow:0 4px 14px rgba(0,0,0,.07)}
+:focus-visible{outline:2px solid var(--gr);outline-offset:2px;border-radius:8px}
+html{scroll-behavior:smooth}
+@media(prefers-reduced-motion:reduce){.vin,.pl.go .pill{animation:none}*{transition:none!important;scroll-behavior:auto!important}}
 /* chữ các nút luôn màu đen */
 .sm,.sm.on,.b1,.ed,.nav2 button,.tl .l button,.sbtn,.btn{color:#14181f!important}
 </style>
@@ -282,19 +291,20 @@ try{history.replaceState({in:0},'')}catch(e){}
 window.addEventListener('popstate',()=>{fromPop=true;render();show('vHome');fromPop=false});
 $('nHome').onclick=()=>{render();show('vHome')};document.querySelector('.logo').onclick=()=>{render();show('vHome')};$('nAdd').onclick=()=>show('vAdd');
 /* home */
-const openB=new Set(),subSel={},subOff=new Set();/* subSel: sách -> nhóm nhỏ đang chọn; subOff: sách đang thu gọn khung bài */
+let fxPl=false;const openB=new Set(),subSel={},subOff=new Set();/* subSel: sách -> nhóm nhỏ đang chọn; subOff: sách đang thu gọn khung bài */
 async function render(){
   const q=$('q').value.trim().toLowerCase();
   const ls=(await all()).sort((a,b)=>a.id-b.id).filter(l=>!q||(l.title+' '+(l.book||'')+' '+(l.sub||'')).toLowerCase().includes(q));
   $('empty').classList.toggle('hide',ls.length>0);
   const g={};ls.forEach(l=>(g[l.book||'Khác']=g[l.book||'Khác']||[]).push(l));
+  const fx0=fxPl;fxPl=false;
   $('list').innerHTML=Object.keys(g).map(k=>{
     /* khung 2 (trái): các nhóm nhỏ; bài không có nhóm thì nằm trong 1 ô mang tên sách. Khung 3 (phải): bài của nhóm đang chọn */
     const sb={};g[k].forEach(l=>{const n=l.sub||k;(sb[n]=sb[n]||[]).push(l)});
-    const sk=Object.keys(sb),sel=subOff.has(k)&&!q?null:(sb[subSel[k]]?subSel[k]:(sk.length===1||q?sk[0]:null));
-    return `<div class="acc ${openB.has(k)||q?'open':''}"><div class="ah" data-k="${esc(k)}"><em class="nm">${esc(k)}</em><b class="ed" data-k="${esc(k)}" title="Đổi tên học phần">✎ Đổi tên</b><span>⌄</span></div><div class="ab"><div class="subs">`
+    const sk=Object.keys(sb),sel=subOff.has(k)&&!q?null:(sb[subSel[k]]?subSel[k]:(q?sk[0]:null));
+    return `<div class="acc ${openB.has(k)||q?'open':''}"><div class="ah" data-k="${esc(k)}"><em class="nm">${esc(k)}</em><b class="ed" data-k="${esc(k)}" title="Đổi tên học phần">✎ Đổi tên</b><span>⌄</span></div><div class="abw"><div class="ab"><div class="abi"><div class="subs">`
       +sk.map(n=>`<div class="sub${n===sel?' on':''}" data-b="${esc(k)}" data-s="${esc(n)}">${esc(n)}</div>`).join('')
-      +'</div><div class="pl">'+(sel?sb[sel].map(l=>`<div class="pill" data-id="${l.id}">${esc(l.title)}</div>`).join(''):'')+'</div></div></div>'}).join('');
+      +'</div><div class="pl'+(fx0?' go':'')+'">'+(sel?sb[sel].map(l=>`<div class="pill" data-id="${l.id}">${esc(l.title)}</div>`).join(''):'')+'</div></div></div></div></div>'}).join('');
 }
 $('q').oninput=render;
 $('list').onclick=async e=>{
@@ -305,7 +315,7 @@ $('list').onclick=async e=>{
   const sbx=e.target.closest('.sub');
   if(sbx){const b=sbx.dataset.b;/* bấm lại ô đang chọn => thu gọn các bài; bấm lần nữa (hoặc ô khác) => mở lại */
     if(sbx.classList.contains('on')&&!$('q').value.trim())subOff.add(b);else{subSel[b]=sbx.dataset.s;subOff.delete(b)}
-    render();return}
+    fxPl=true;render();return}
   const ah=e.target.closest('.ah'),pl=e.target.closest('.pill');
   if(ah){const k=ah.dataset.k;openB.has(k)?openB.delete(k):openB.add(k);ah.parentNode.classList.toggle('anim',!openB.has(k)?false:true);ah.parentNode.classList.toggle('open')}
   if(pl){cur=(await all()).find(x=>x.id==pl.dataset.id);$('mt').textContent=(cur.book?cur.book+' - ':'')+cur.title;show('vMode')}
