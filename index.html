@@ -105,6 +105,7 @@ html{scroll-behavior:smooth}
 
 <div id="vHome">
  <div class="th"><h1>Intensive Listening</h1><input class="srch" id="q" placeholder="🔍  Search"></div>
+ <div id="bkWarn" class="hide" style="background:var(--yl2);border:1px solid var(--yl);border-radius:12px;padding:10px 16px;margin:0 0 14px;cursor:pointer;color:var(--tx)"></div>
  <h3>Advanced Dictation</h3>
  <div class="col" id="list"></div><p class="mu" id="empty">Chưa có bài nào. Vào "Thêm bài" để bắt đầu.</p>
 </div>
@@ -112,7 +113,7 @@ html{scroll-behavior:smooth}
 <div id="vBk" class="hide">
  <div class="th"><h1>Sao lưu</h1></div>
  <div class="card">
-  <p class="mu" style="margin-top:0">Tick bài muốn xuất (tick tên sách để chọn cả nhóm). Có thể xuất gộp 1 file, hoặc mỗi bài 1 file riêng cho dễ cất giữ. Nhập được nhiều file cùng lúc, kể cả file sao lưu cũ.</p>
+  <p class="mu" id="bkPers" style="margin-top:0"></p><p class="mu" style="margin-top:0">Tick bài muốn xuất (tick tên sách để chọn cả nhóm). Có thể xuất gộp 1 file, hoặc mỗi bài 1 file riêng cho dễ cất giữ. Nhập được nhiều file cùng lúc, kể cả file sao lưu cũ.</p>
   <div class="bkb"><input type="text" id="bkQ" placeholder="🔍 Lọc bài…"><button class="sbtn" id="bkAll">Chọn tất cả</button><button class="sbtn" id="bkNone">Bỏ chọn</button></div>
   <div class="bkl" id="bkList"></div>
   <div class="mu" id="bkInfo"></div>
@@ -318,6 +319,7 @@ let fxPl=false;const openB=new Set(),subSel={},subOff=new Set();/* subSel: sách
 async function render(){
   const q=$('q').value.trim().toLowerCase();
   const ls=(await all()).sort((a,b)=>a.id-b.id).filter(l=>!q||(l.title+' '+(l.book||'')+' '+(l.sub||'')).toLowerCase().includes(q));
+  bkWarn();
   $('empty').classList.toggle('hide',ls.length>0);
   const g={};ls.forEach(l=>(g[l.book||'Khác']=g[l.book||'Khác']||[]).push(l));
   const fx0=fxPl;fxPl=false;
@@ -341,7 +343,7 @@ const fname=s=>(s||'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,'_').replace(/\s+/g
 const itemName=l=>fname((l.book?l.book+' - ':'')+(l.sub?l.sub+' - ':'')+l.title)||'bai';
 const bkMsg=t=>{$('bkMsg').textContent=t};
 async function renderBk(){
-  bkAllL=(await all()).sort((a,b)=>a.id-b.id);
+  bkPers();bkAllL=(await all()).sort((a,b)=>a.id-b.id);
   const ids=new Set(bkAllL.map(l=>l.id));[...bkSel].forEach(i=>{if(!ids.has(i))bkSel.delete(i)});
   drawBk()}
 function drawBk(){
@@ -383,7 +385,7 @@ $('bkOutSel').onclick=async()=>{const sel=getSel();if(!sel.length)return;
   $('bkOutSel').disabled=$('bkOutEach').disabled=true;
   try{const blob=await packItems(sel,(i,n)=>bkMsg(`Đang đóng gói ${i}/${n}…`));
     saveBlob(blob,sel.length===1?`diktat-${itemName(sel[0])}.json`:`diktat-backup-${today()}-${sel.length}bai.json`);
-    bkMsg(`Đã xuất ${sel.length} bài ✓ – hãy cất file này ở nơi an toàn.`)}
+    bkMark(sel.map(l=>l.id));bkMsg(`Đã xuất ${sel.length} bài ✓ – hãy cất file này ở nơi an toàn.`)}
   catch(e){console.error(e);bkMsg('Lỗi khi xuất: '+(e&&e.message||e))}
   updBk()};
 $('bkOutEach').onclick=async()=>{const sel=getSel();if(!sel.length)return;
@@ -392,6 +394,7 @@ $('bkOutEach').onclick=async()=>{const sel=getSel();if(!sel.length)return;
     for(let i=0;i<sel.length;i++){bkMsg(`Đang xuất ${i+1}/${sel.length}: ${sel[i].title}…`);
       saveBlob(await packItems([sel[i]]),`diktat-${String(i+1).padStart(w,'0')}-${itemName(sel[i])}.json`);
       await new Promise(r=>setTimeout(r,450))}
+    bkMark(sel.map(l=>l.id));
     bkMsg(`Đã xuất ${sel.length} file ✓ (nếu trình duyệt hỏi "tải nhiều file" thì chọn Cho phép).`)}
   catch(e){console.error(e);bkMsg('Lỗi khi xuất: '+(e&&e.message||e))}
   updBk()};
@@ -403,10 +406,26 @@ $('bkFile').onchange=async e=>{const fs=[...e.target.files];e.target.value='';if
       if(!j||j.app!=='diktat'||!Array.isArray(j.items))throw new Error('không phải file sao lưu của trang này');
       for(const o of j.items){
         for(const k in o){const v=o[k];if(v&&typeof v==='object'&&typeof v.__blob==='string')o[k]=await (await fetch(v.__blob)).blob()}
-        if(o.id==null)continue;await put(o);n++;bkMsg(`Đang nhập… ${n} bài (file ${fi+1}/${fs.length})`)}}
+        if(o.id==null)continue;await put(o);bkMark([o.id]);n++;bkMsg(`Đang nhập… ${n} bài (file ${fi+1}/${fs.length})`)}}
     catch(err){console.error(err);bad.push(f.name+': '+(err&&err.message||err))}}
   bkMsg(`Đã nhập ${n} bài ✓ (bài trùng mã sẽ được ghi đè).`+(bad.length?` Lỗi ${bad.length} file – ${bad.join('; ')}`:''));
   render();renderBk()};
+/* ===== nhắc sao lưu: nhớ bài nào đã xuất/nhập, cảnh báo bài chưa sao lưu ===== */
+const BK_KEY='diktatBk';
+const bkGet=()=>{try{return JSON.parse(localStorage.getItem(BK_KEY))||{}}catch(e){return{}}};
+const bkMark=ids=>{try{const o=bkGet(),st=new Set(o.ids||[]);ids.forEach(i=>st.add(i));localStorage.setItem(BK_KEY,JSON.stringify({at:Date.now(),ids:[...st]}))}catch(e){}};
+async function bkWarn(){const el=$('bkWarn');if(!el)return;
+  try{const ls=await all();if(!ls.length){el.classList.add('hide');return}
+    const o=bkGet(),done=new Set(o.ids||[]),n=ls.filter(l=>!done.has(l.id)).length;
+    if(!n){el.classList.add('hide');return}
+    el.textContent=o.at?`⚠ Có ${n} bài chưa sao lưu (lần sao lưu gần nhất: ${new Date(o.at).toLocaleDateString('vi-VN')}). Bấm vào đây để vào Sao lưu.`:`⚠ Bạn chưa sao lưu lần nào – ${n} bài đang chỉ nằm trong trình duyệt, lỡ bị xóa là mất. Bấm vào đây để sao lưu.`;
+    el.classList.remove('hide')}catch(e){el.classList.add('hide')}}
+$('bkWarn').onclick=()=>$('nBk').click();
+async function bkPers(){const el=$('bkPers');if(!el)return;
+  try{const ok=navigator.storage&&navigator.storage.persisted&&await navigator.storage.persisted();
+    el.textContent=ok?'✅ Trình duyệt đã đồng ý giữ dữ liệu của trang này cố định (không tự dọn khi máy đầy). Vẫn nên sao lưu định kỳ.'
+      :'⚠ Trình duyệt chưa cam kết giữ dữ liệu cố định, có thể bị dọn khi máy đầy hoặc khi xóa dữ liệu duyệt web. Hãy sao lưu thường xuyên. (Lưu trang vào dấu trang ⭐ giúp Chrome dễ đồng ý giữ hơn.)'}
+  catch(e){el.textContent=''}}
 /* xin trình duyệt giữ dữ liệu bền, không tự dọn khi thiếu dung lượng */
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 
