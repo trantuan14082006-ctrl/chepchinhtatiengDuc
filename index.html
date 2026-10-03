@@ -180,7 +180,7 @@ html{scroll-behavior:smooth}
   <label>Bản dịch tiếng Việt (mỗi câu 1 dòng)</label><textarea id="etrans"></textarea>
   <div class="row"><button class="sbtn" id="eauto">Tự tách lại theo số dòng</button><button class="sbtn p" id="ewh">Tách bằng Whisper</button><select id="wm2" class="wmsel"><option value="tiny">tiny (nhẹ nhất – cho máy yếu)</option><option value="base">base (cân bằng – máy trung bình)</option><option value="small">small (chính xác nhất – nên dùng khi có GPU)</option></select><button class="sbtn" id="eview">👂 Whisper nghe được gì</button><button class="sbtn p" id="esave">Lưu</button><button class="sbtn" id="eback">← Quay lại</button><span class="mu" id="emsg"></span><button class="sbtn hide" id="wskip2">Bỏ qua Whisper</button></div>
   <pre class="wv hide" id="wview"></pre>
-  <p class="mu">Chỉnh giây bắt đầu/kết thúc từng câu, bấm ▶ để nghe thử.</p><div id="segs"></div>
+  <p class="mu">Chỉnh giây bắt đầu/kết thúc từng câu, bấm ▶ để nghe thử. Dòng có ⚠ = mốc được ước lượng (chưa chắc), không phải lỗi – nghe thử là biết.</p><div id="segs"></div>
  </div>
 </div>
 </main>
@@ -237,7 +237,7 @@ const del=id=>new Promise(r=>{mem=mem.filter(x=>x.id!==id);if(!db)return r();try
 /* auto split */
 /* chọn điểm cắt: kết hợp khoảng lặng + độ dài chữ của từng câu (quy hoạch động) */
 function pickCuts(cands,lo,hi,ls){
-  const N=ls.length,W=ls.map(l=>l.replace(/[^\p{L}\p{N}]/gu,'').length+8),tw=W.reduce((a,b)=>a+b,0),tot=hi-lo;
+  const N=ls.length,W=ls.map(l=>textW(l)+8),tw=W.reduce((a,b)=>a+b,0),tot=hi-lo;
   const exp=W.map(w=>tot*w/tw);
   if(N<=1)return [];
   let c=cands.slice().sort((a,b)=>b.g-a.g).slice(0,400).sort((a,b)=>a.t-b.t);
@@ -542,14 +542,19 @@ function alignLines(ls,words,dur){
   const mt=new Int32Array(n).fill(-1);
   for(let i=n,j=m;i>0||j>0;){const b=bk[i*W+j];
     if(i>0&&j>0&&b===0){if(sim(S[i-1],words[j-1].t)>=.5)mt[i-1]=j-1;i--;j--}else if(i>0&&(b===1||j===0))i--;else j--}
-  const st=Array(N).fill(null),cnt=Array(N).fill(0),mh=Array(N).fill(0),ms=Array.from({length:N},()=>[]);let hit=0;
-  for(let k=0;k<n;k++){const i=own[k];cnt[i]++;if(mt[k]>=0)ms[i].push(words[mt[k]])}
-  /* các từ của 1 dòng phải nằm gần nhau: nếu khớp rải rác (vd. chữ "Ja" khớp nhầm chỗ xa) thì chỉ giữ cụm đông nhất */
-  for(let i=0;i<N;i++){const w=ms[i].slice().sort((x,y)=>x.s-y.s);if(!w.length)continue;
-    let best=[],c=[w[0]];
-    for(let k=1;k<w.length;k++){if(w[k].s-c[c.length-1].e>3){if(c.length>best.length)best=c;c=[]}c.push(w[k])}
+  const st=Array(N).fill(null),cnt=Array(N).fill(0),mh=Array(N).fill(0),ms=Array.from({length:N},()=>[]),fi=Array(N).fill(-1),la=Array(N).fill(-1);let hit=0;
+  for(let k=0;k<n;k++){const i=own[k];cnt[i]++;if(fi[i]<0)fi[i]=k;la[i]=k;if(mt[k]>=0)ms[i].push({w:words[mt[k]],k})}
+  const tokT=t=>/^\d+$/.test(t)?t.length*.45:t.length*.075;   /* ước lượng thời gian đọc 1 từ chưa khớp (giây) */
+  /* các từ của 1 dòng phải nằm gần nhau: nếu khớp rải rác (vd. chữ "Ja" khớp nhầm chỗ xa) thì chỉ giữ cụm đông nhất;
+     từ đầu/cuối dòng không khớp (Whisper bỏ sót) thì nới biên dòng ra theo thời gian đọc ước lượng */
+  for(let i=0;i<N;i++){const m=ms[i].slice().sort((x,y)=>x.w.s-y.w.s);if(!m.length)continue;
+    let best=[],c=[m[0]];
+    for(let q=1;q<m.length;q++){if(m[q].w.s-c[c.length-1].w.e>3){if(c.length>best.length)best=c;c=[]}c.push(m[q])}
     if(c.length>best.length)best=c;
-    mh[i]=best.length;hit+=best.length;st[i]=[Math.min(...best.map(x=>x.s)),Math.max(...best.map(x=>x.e))]}
+    mh[i]=best.length;hit+=best.length;
+    const ks=best.map(x=>x.k),k0=Math.min(...ks),k1=Math.max(...ks);let lead=0,trail=0;
+    for(let k=fi[i];k<k0;k++)lead+=tokT(S[k]);for(let k=k1+1;k<=la[i];k++)trail+=tokT(S[k]);
+    st[i]=[Math.max(0,Math.min(...best.map(x=>x.w.s))-Math.min(lead,1.5)),Math.min(dur,Math.max(...best.map(x=>x.w.e))+Math.min(trail,1.5))]}
   if(hit<n*.3)return null;
   const conf=cnt.map((c,i)=>c?mh[i]/c:1);
   /* dòng không khớp được từ nào: chia đều theo số từ trong khoảng giữa hai dòng đã biết */
@@ -630,7 +635,7 @@ function squeezeSilence(a,eng){
   return {audio:out,map,removed:cum};
 }
 /* dòng Whisper nghe không chắc (hoặc có thời lượng vô lý so với độ dài chữ) => bỏ mốc của Whisper, tách lại bằng khoảng lặng trong đoạn nằm giữa 2 dòng đáng tin */
-const textW=l=>{let w=0;for(const ch of l){if(/\d/.test(ch))w+=3;else if(/\p{L}/u.test(ch))w+=1}return w};
+const textW=l=>{let w=0;for(const ch of l){if(/\d/.test(ch))w+=6;else if(/\p{L}/u.test(ch))w+=1}return w};
 function repairParts(parts,ls,eng,dur){
   const N=parts.length,conf=parts.conf.slice(),out=parts.map(p=>p.slice());
   const bad=badFlags(parts,ls);
@@ -655,7 +660,7 @@ function repairParts(parts,ls,eng,dur){
       for(let k=i;k<j;k++){out[k]=[bd[k-i],bd[k-i+1]];conf[k]=Math.min(conf[k],.5)}}
     i=j}
   out.conf=conf;return out}
-const badFlags=(parts,ls)=>ls.map((l,i)=>{const d=parts[i][1]-parts[i][0];return parts.conf[i]<.6||d>2.5+textW(l)/5||d<.1});
+const badFlags=(parts,ls)=>ls.map((l,i)=>{const d=parts[i][1]-parts[i][0];return parts.conf[i]<.6||d>2.5+textW(l)/5||d<.25+textW(l)*.025});
 /* cắt đoạn [a,b] thành các cửa sổ ngắn (<= maxLen giây), mỗi chỗ cắt chọn điểm có năng lượng thấp nhất => mỗi cửa sổ được Whisper nghe ĐỘC LẬP, câu lặp không bị gộp/bỏ */
 function hearWindows(eng,a,b,maxLen){
   const w=[];let pos=a;
@@ -665,13 +670,13 @@ function hearWindows(eng,a,b,maxLen){
     const c=bf*.01;w.push([pos,c]);pos=c}
   w.push([pos,b]);return w}
 /* lượt nghe thứ 2: chỉ với các đoạn có dòng đáng ngờ, cho Whisper nghe lại từng cửa sổ ngắn rồi thay các từ của đoạn đó. Trả về danh sách từ mới hoặc null */
-async function rehear(a,eng,words,parts,ls,dur,say){
+async function rehear(a,eng,words,parts,ls,dur,say,maxLen=7){
   const bad=badFlags(parts,ls);if(!bad.some(Boolean))return null;
   const N=ls.length,regs=[];
   for(let i=0;i<N;){if(!bad[i]){i++;continue}let j=i;while(j<N&&bad[j])j++;
     regs.push([Math.max(0,(i>0?parts[i-1][1]:0)-.3),Math.min(dur,(j<N?parts[j][0]:dur)+.3)]);i=j}
   const so=Float32Array.from(eng).sort(),p95=Math.max(so[Math.floor(so.length*.95)],1e-6);
-  const jobs=[];regs.forEach(r=>hearWindows(eng,r[0],r[1],7).forEach(w=>{
+  const jobs=[];regs.forEach(r=>hearWindows(eng,r[0],r[1],maxLen).forEach(w=>{
     if(w[1]-w[0]<.8)return;let m=0,c=0;for(let f=Math.floor(w[0]*100);f<Math.min(eng.length,Math.floor(w[1]*100));f++){m+=eng[f];c++}
     if(c&&m/c>p95*.03)jobs.push(w)}));
   if(!jobs.length||jobs.length>80)return null;
@@ -684,6 +689,16 @@ async function rehear(a,eng,words,parts,ls,dur,say){
       if(t)fresh.push({t,s:w0+s0,e:Math.min(w1,w0+e0)})})}
   const inReg=t=>regs.some(r=>t>=r[0]&&t<r[1]);
   return words.filter(x=>!inReg(x.s)).concat(fresh).sort((x,y)=>x.s-y.s)}
+/* lặp lại lượt nghe lại (cửa sổ 7s -> 5s -> 9s) cho tới khi hết dòng đáng ngờ hoặc không tiến thêm: 1 lần bấm là đủ */
+async function refine(a,eng,words,parts,ls,dur,say){
+  const nb=x=>badFlags(x,ls).filter(Boolean).length,L=[7,5,9];
+  for(let r=0;r<L.length&&nb(parts)>0;r++){
+    let w2=null;
+    try{w2=await rehear(a,eng,words,parts,ls,dur,say,L[r])}catch(e){if(e&&e.skip)throw e;console.warn(e)}
+    if(!w2)break;
+    const p2=alignLines(ls,w2,dur);if(!p2)continue;
+    if(nb(p2)<nb(parts)){parts=p2;words=w2}}
+  return {parts,words}}
 async function whisperSplit(blob,ls,say,cached){
   say('Đang đọc audio…');const a=await to16k(blob),dur=a.length/16000;
   const fr=160,nf=Math.floor(a.length/fr),eng=new Float32Array(nf);
@@ -699,9 +714,7 @@ async function whisperSplit(blob,ls,say,cached){
     say('Đang đối chiếu với script…');await new Promise(r=>setTimeout(r,0));
     parts=alignLines(ls,words,dur)}
   if(!parts)return null;
-  try{const w2=await rehear(a,eng,words,parts,ls,dur,say);
-    if(w2){const p2=alignLines(ls,w2,dur),nb=x=>badFlags(x,ls).filter(Boolean).length;
-      if(p2&&nb(p2)<=nb(parts)){parts=p2;words=w2}}}
+  try{const rf=await refine(a,eng,words,parts,ls,dur,say);parts=rf.parts;words=rf.words}
   catch(e){if(e&&e.skip)throw e;console.warn(e)}
   parts=repairParts(parts,ls,eng,dur);
   return {segs:buildSegs(parts,dur,eng),words,conf:parts.conf};
@@ -744,7 +757,7 @@ async function smartSplit(blob,ls,say,useW,cached){
 }
 /* editor */
 function openEditor(){setAudio(cur.audio);$('et').textContent=head();$('ebook').value=cur.book||'';$('esub').value=cur.sub||'';$('etitle').value=cur.title;$('escript').value=cur.script;$('etrans').value=cur.trans||'';$('emsg').textContent='';$('wview').classList.add('hide');drawSegs(getLines(cur.script),cur.segs,cur.conf);show('vEdit')}
-function drawSegs(ls,sg,cf){const ok=cf&&cf.length===ls.length;$('segs').innerHTML=ls.map((l,i)=>{const w=ok&&cf[i]<.6;return `<div class="seg${w?' warn':''}"${w?' title="Whisper nghe không chắc dòng này – hãy bấm ▶ nghe thử và chỉnh mốc nếu lệch"':''}><span class="mu">${i+1}</span><span class="tt">${w?'⚠ ':''}${esc(l)}</span><input type="number" step="0.05" min="0" value="${sg[i][0]}"><input type="number" step="0.05" min="0" value="${sg[i][1]}"><button class="sbtn" data-p="${i}">▶</button></div>`}).join('')}
+function drawSegs(ls,sg,cf){const ok=cf&&cf.length===ls.length;$('segs').innerHTML=ls.map((l,i)=>{const w=ok&&cf[i]<.6;return `<div class="seg${w?' warn':''}"${w?' title="Mốc dòng này được ước lượng (Whisper không ghép chắc được) – không phải lỗi. Bấm ▶ nghe thử, đúng thì bỏ qua."':''}><span class="mu">${i+1}</span><span class="tt">${w?'⚠ ':''}${esc(l)}</span><input type="number" step="0.05" min="0" value="${sg[i][0]}"><input type="number" step="0.05" min="0" value="${sg[i][1]}"><button class="sbtn" data-p="${i}">▶</button></div>`}).join('')}
 const readSegs=()=>[...$('segs').children].map(r=>{const n=r.querySelectorAll('input');return[+n[0].value,+n[1].value]});
 $('segs').onclick=e=>{const p=e.target.dataset.p;if(p!==undefined){const s=readSegs()[p];playRange(s[0],s[1])}};
 $('eauto').onclick=async()=>{const ls=getLines($('escript').value);if(!ls.length)return;$('emsg').textContent='Đang tách…';cur.segs=await detect(cur.audio,ls.length,ls);cur.conf=null;drawSegs(ls,cur.segs);$('emsg').textContent=''};
