@@ -605,15 +605,18 @@ function buildSegs(parts,dur,eng){
     if(eng){
       /* Whisper hay đặt mốc đầu/cuối câu lệch cỡ nửa giây (nhất là các từ ngắn như "Ja", "bitte", "zurückrufen?") => tìm rộng ±0,5s,
          ưu tiên khoảng lặng THẬT trong audio: càng dài càng tốt, càng gần giữa 2 mốc càng tốt */
-      const W=.5,a=Math.max(0,Math.floor((Math.min(e,s)-W)*100)),z=Math.min(eng.length-1,Math.ceil((Math.max(e,s)+W)*100)),th=p95*.07,runs=[];let gs=-1;
+      const W=.5,a=Math.max(0,Math.floor((Math.min(e,s)-W)*100)),z=Math.min(eng.length-1,Math.ceil((Math.max(e,s)+W+(tmI>0?Math.min(tdI,2.5)+1:0))*100)),th=p95*.07,runs=[];let gs=-1;
       for(let f=a;f<=z+1;f++){const q=f<=z&&eng[f]<th;if(q){if(gs<0)gs=f}else if(gs>=0){if(f-gs>=6)runs.push({t:(gs+f)/2*.01,d:(f-gs)*.01});gs=-1}}
       /* nếu đầu dòng sau / cuối dòng trước bị Whisper bỏ sót chữ ngắn thì chữ đó nằm giữa 2 mốc:
          chọn khoảng lặng sao cho phần "thừa" mỗi bên có độ dài gần với thời gian ước lượng của các từ bị sót */
+      /* dòng trước thiếu chữ cuối: chỗ ngập ngừng 0,1-0,2s giữa các nhóm số không phải ranh giới câu => chỉ xét quãng nghỉ >= 0,25s nếu có */
+      if(tmI>0){const lg=runs.filter(r=>r.d>=.25);if(lg.length)runs.splice(0,runs.length,...lg)}
       if(runs.length){let best=1e9;
         /* phạt nặng nếu cắt TRƯỚC mốc cuối dòng trước (đang đọc dở), nhất là khi dòng đó bị thiếu chữ ở cuối;
            tương tự cho việc cắt SAU mốc đầu dòng sau. Mốc cuối/đầu đã được nới theo số chữ bị sót */
-        const ke=tmI>0?4:1.5,ks=lmI>0?4:1.5,eH=e-Math.min(tdI,2.5);   /* eH = mốc cuối đã nghe thật; phần nới thêm chỉ là ước lượng nên chỉ phạt nhẹ */
-        runs.forEach(r=>{const v=ke*Math.max(0,eH-r.t)+.8*Math.max(0,e-r.t)+ks*Math.max(0,r.t-s)+.3*Math.abs(r.t-m)-2*r.d;if(v<best){best=v;c=r.t}})}
+        const ke=tmI>0?4:1.5,ks=lmI>0?4:(tmI>0?.5:1.5),kd=tmI>0?3:2,eH=e-Math.min(tdI,2.5);   /* dòng trước thiếu chữ cuối: mốc đầu dòng sau của Whisper cũng kém tin cậy => phạt nhẹ, và ưu tiên quãng nghỉ DÀI (hết câu) hơn quãng nghỉ ngắn giữa các nhóm số */
+          /* eH = mốc cuối đã nghe thật; phần nới thêm chỉ là ước lượng nên chỉ phạt nhẹ */
+        runs.forEach(r=>{const v=ke*Math.max(0,eH-r.t)+.8*Math.max(0,e-r.t)+ks*Math.max(0,r.t-s)+.3*Math.abs(r.t-m)-kd*r.d;if(v<best){best=v;c=r.t}})}
       else{let best=1e9;
         for(let f=a;f<=z;f++){const v=((eng[f-1]||eng[f])+eng[f]+(eng[f+1]||eng[f]))/3/p95+.15*Math.abs(f*.01-m);if(v<best){best=v;c=f*.01+.005}}}}
     cuts.push(c)}
