@@ -89,6 +89,11 @@ html{scroll-behavior:smooth}
 @media(prefers-reduced-motion:reduce){.vin,.pl.go .pill{animation:none}*{transition:none!important;scroll-behavior:auto!important}}
 /* chữ các nút luôn màu đen */
 .sm,.sm.on,.b1,.ed,.nav2 button,.tl .l button,.sbtn,.btn{color:#14181f!important}
+.bkb{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px}.bkb input[type=text]{flex:1;min-width:160px;width:auto!important}
+.bkl{max-height:50vh;overflow:auto;background:var(--bg);border:1px solid var(--bd);border-radius:12px;padding:6px 10px;margin-bottom:12px}
+.card label.bkh,.card label.bki{display:flex;gap:10px;align-items:center;margin:0;padding:6px 4px;border-radius:8px;cursor:pointer;color:var(--tx);font-size:15px}
+.card label.bkh{font-weight:700;margin-top:6px}.card label.bki{padding-left:30px}.card label.bkh:hover,.card label.bki:hover{background:var(--g)}
+.bki .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bkh .mu,.bki .mu{margin-left:auto;white-space:nowrap;font-weight:400}
 </style>
 </head>
 <body>
@@ -105,8 +110,12 @@ html{scroll-behavior:smooth}
 <div id="vBk" class="hide">
  <div class="th"><h1>Sao lưu</h1></div>
  <div class="card">
-  <p class="mu" style="margin-top:0">Xuất toàn bộ bài (kèm audio) ra 1 file .json để cất giữ, hoặc nhập lại file đó khi cần khôi phục.</p>
-  <div class="row bk"><button class="sbtn" id="bkOut">⬇ Xuất sao lưu</button><button class="sbtn" id="bkIn">⬆ Nhập sao lưu</button><input type="file" id="bkFile" accept=".json,application/json" class="hide"><span class="mu" id="bkMsg"></span></div>
+  <p class="mu" style="margin-top:0">Tick bài muốn xuất (tick tên sách để chọn cả nhóm). Có thể xuất gộp 1 file, hoặc mỗi bài 1 file riêng cho dễ cất giữ. Nhập được nhiều file cùng lúc, kể cả file sao lưu cũ.</p>
+  <div class="bkb"><input type="text" id="bkQ" placeholder="🔍 Lọc bài…"><button class="sbtn" id="bkAll">Chọn tất cả</button><button class="sbtn" id="bkNone">Bỏ chọn</button></div>
+  <div class="bkl" id="bkList"></div>
+  <div class="mu" id="bkInfo"></div>
+  <div class="row"><button class="sbtn p" id="bkOutSel">⬇ Xuất 1 file</button><button class="sbtn" id="bkOutEach">⬇ Mỗi bài 1 file</button><button class="sbtn" id="bkIn">⬆ Nhập sao lưu</button><input type="file" id="bkFile" accept=".json,application/json" multiple class="hide"></div>
+  <div class="mu" id="bkMsg" style="margin-top:10px"></div>
  </div>
 </div>
 
@@ -298,7 +307,7 @@ function show(v){V.forEach(i=>$(i).classList.toggle('hide',i!==v));{const el=$(v
 let fromPop=false;
 try{history.replaceState({in:0},'')}catch(e){}
 window.addEventListener('popstate',()=>{fromPop=true;render();show('vHome');fromPop=false});
-$('nHome').onclick=()=>{render();show('vHome')};document.querySelector('.logo').onclick=()=>{render();show('vHome')};$('nAdd').onclick=()=>show('vAdd');$('nBk').onclick=()=>show('vBk');
+$('nHome').onclick=()=>{render();show('vHome')};document.querySelector('.logo').onclick=()=>{render();show('vHome')};$('nAdd').onclick=()=>show('vAdd');$('nBk').onclick=()=>{renderBk();show('vBk')};
 /* home */
 let fxPl=false;const openB=new Set(),subSel={},subOff=new Set();/* subSel: sách -> nhóm nhỏ đang chọn; subOff: sách đang thu gọn khung bài */
 async function render(){
@@ -317,29 +326,82 @@ async function render(){
       +'</div><div class="pl'+(fx0?' go':'')+'">'+(sel?sb[sel].slice().sort((a,b)=>nat(a.title,b.title)).map(l=>`<div class="pill" data-id="${l.id}">${esc(l.title)}</div>`).join(''):'')+'</div></div></div></div></div>'}).join('');
 }
 $('q').oninput=render;
-/* ===== sao lưu / khôi phục: 1 file .json chứa toàn bộ bài (kể cả audio) ===== */
+/* ===== sao lưu / khôi phục: chọn bài để xuất (1 file hoặc mỗi bài 1 file), nhập nhiều file cùng lúc ===== */
 const b2d=b=>new Promise((res,rej)=>{const f=new FileReader();f.onload=()=>res(f.result);f.onerror=()=>rej(f.error);f.readAsDataURL(b)});
-$('bkOut').onclick=async()=>{const m=$('bkMsg'),btn=$('bkOut');
-  try{const ls=await all();if(!ls.length){m.textContent='Chưa có bài nào để sao lưu.';return}
-    btn.disabled=true;const parts=['{"app":"diktat","v":1,"items":['];
-    for(let i=0;i<ls.length;i++){m.textContent=`Đang đóng gói ${i+1}/${ls.length}…`;
-      const o={};for(const k in ls[i]){const v=ls[i][k];o[k]=v instanceof Blob?{__blob:await b2d(v)}:v}
-      parts.push((i?',':'')+JSON.stringify(o));await new Promise(r=>setTimeout(r,0))}
-    parts.push(']}');
-    const a=document.createElement('a'),url=URL.createObjectURL(new Blob(parts,{type:'application/json'}));
-    a.href=url;a.download='diktat-backup-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),10000);m.textContent=`Đã xuất ${ls.length} bài ✓ – hãy cất file này ở nơi an toàn.`}
-  catch(e){console.error(e);m.textContent='Lỗi khi xuất: '+(e&&e.message||e)}
-  btn.disabled=false};
+const bkSel=new Set();let bkAllL=[];
+const natC=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'});
+const mb=n=>n>=1048576?(n/1048576).toFixed(n>=1.05e8?0:1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
+const lsize=l=>(l.audio&&l.audio.size)||0;
+const fname=s=>(s||'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,'_').replace(/\s+/g,' ').trim().slice(0,70);
+const itemName=l=>fname((l.book?l.book+' - ':'')+(l.sub?l.sub+' - ':'')+l.title)||'bai';
+const bkMsg=t=>{$('bkMsg').textContent=t};
+async function renderBk(){
+  bkAllL=(await all()).sort((a,b)=>a.id-b.id);
+  const ids=new Set(bkAllL.map(l=>l.id));[...bkSel].forEach(i=>{if(!ids.has(i))bkSel.delete(i)});
+  drawBk()}
+function drawBk(){
+  const q=$('bkQ').value.trim().toLowerCase(),g={};
+  bkAllL.filter(l=>!q||(l.title+' '+(l.book||'')+' '+(l.sub||'')).toLowerCase().includes(q)).forEach(l=>(g[l.book||'Khác']=g[l.book||'Khác']||[]).push(l));
+  const ks=Object.keys(g).sort(natC);
+  $('bkList').innerHTML=ks.length?ks.map(k=>{
+    const it=g[k].slice().sort((a,b)=>natC(a.sub||'',b.sub||'')||natC(a.title,b.title));
+    return `<div class="bkg"><label class="bkh"><input type="checkbox" data-g="1"><span class="t">${esc(k)}</span><span class="mu">${it.length} bài</span></label>`
+      +it.map(l=>`<label class="bki"><input type="checkbox" data-id="${l.id}"${bkSel.has(l.id)?' checked':''}><span class="t">${l.sub?esc(l.sub)+' › ':''}${esc(l.title)}</span><span class="mu">${mb(lsize(l))}</span></label>`).join('')+'</div>'}).join('')
+    :'<p class="mu" style="margin:8px 4px">'+(bkAllL.length?'Không có bài nào khớp.':'Chưa có bài nào để sao lưu.')+'</p>';
+  updBk()}
+function updBk(){
+  document.querySelectorAll('#bkList .bkg').forEach(g=>{const c=[...g.querySelectorAll('input[data-id]')],n=c.filter(x=>x.checked).length,h=g.querySelector('input[data-g]');
+    h.checked=n>0&&n===c.length;h.indeterminate=n>0&&n<c.length});
+  const sel=bkAllL.filter(l=>bkSel.has(l.id)),tot=sel.reduce((a,l)=>a+lsize(l),0);
+  $('bkInfo').textContent=sel.length?`Đã chọn ${sel.length}/${bkAllL.length} bài · khoảng ${mb(tot)} audio`:`${bkAllL.length} bài – chưa chọn bài nào`;
+  $('bkOutSel').disabled=$('bkOutEach').disabled=!sel.length}
+$('bkQ').oninput=drawBk;
+$('bkList').onchange=e=>{const t=e.target;
+  if(t.dataset.g){t.closest('.bkg').querySelectorAll('input[data-id]').forEach(x=>{x.checked=t.checked;t.checked?bkSel.add(+x.dataset.id):bkSel.delete(+x.dataset.id)})}
+  else if(t.dataset.id){t.checked?bkSel.add(+t.dataset.id):bkSel.delete(+t.dataset.id)}
+  updBk()};
+$('bkAll').onclick=()=>{document.querySelectorAll('#bkList input[data-id]').forEach(x=>{x.checked=true;bkSel.add(+x.dataset.id)});updBk()};
+$('bkNone').onclick=()=>{bkSel.clear();document.querySelectorAll('#bkList input[type=checkbox]').forEach(x=>x.checked=false);updBk()};
+async function packItems(items,say){
+  const parts=['{"app":"diktat","v":1,"items":['];
+  for(let i=0;i<items.length;i++){if(say)say(i+1,items.length);
+    const o={};for(const k in items[i]){const v=items[i][k];o[k]=v instanceof Blob?{__blob:await b2d(v)}:v}
+    parts.push((i?',':'')+JSON.stringify(o));await new Promise(r=>setTimeout(r,0))}
+  parts.push(']}');return new Blob(parts,{type:'application/json'})}
+function saveBlob(blob,name){const a=document.createElement('a'),u=URL.createObjectURL(blob);
+  a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),15000)}
+const today=()=>new Date().toISOString().slice(0,10);
+const getSel=()=>bkAllL.filter(l=>bkSel.has(l.id));
+$('bkOutSel').onclick=async()=>{const sel=getSel();if(!sel.length)return;
+  const tot=sel.reduce((a,l)=>a+lsize(l),0);
+  if(tot>4e8&&!confirm(`Tổng khoảng ${mb(tot)} – gộp 1 file có thể làm trình duyệt hết bộ nhớ. Nên dùng "Mỗi bài 1 file". Vẫn xuất gộp?`))return;
+  $('bkOutSel').disabled=$('bkOutEach').disabled=true;
+  try{const blob=await packItems(sel,(i,n)=>bkMsg(`Đang đóng gói ${i}/${n}…`));
+    saveBlob(blob,sel.length===1?`diktat-${itemName(sel[0])}.json`:`diktat-backup-${today()}-${sel.length}bai.json`);
+    bkMsg(`Đã xuất ${sel.length} bài ✓ – hãy cất file này ở nơi an toàn.`)}
+  catch(e){console.error(e);bkMsg('Lỗi khi xuất: '+(e&&e.message||e))}
+  updBk()};
+$('bkOutEach').onclick=async()=>{const sel=getSel();if(!sel.length)return;
+  $('bkOutSel').disabled=$('bkOutEach').disabled=true;
+  try{const w=String(sel.length).length;
+    for(let i=0;i<sel.length;i++){bkMsg(`Đang xuất ${i+1}/${sel.length}: ${sel[i].title}…`);
+      saveBlob(await packItems([sel[i]]),`diktat-${String(i+1).padStart(w,'0')}-${itemName(sel[i])}.json`);
+      await new Promise(r=>setTimeout(r,450))}
+    bkMsg(`Đã xuất ${sel.length} file ✓ (nếu trình duyệt hỏi "tải nhiều file" thì chọn Cho phép).`)}
+  catch(e){console.error(e);bkMsg('Lỗi khi xuất: '+(e&&e.message||e))}
+  updBk()};
 $('bkIn').onclick=()=>$('bkFile').click();
-$('bkFile').onchange=async e=>{const f=e.target.files[0],m=$('bkMsg');e.target.value='';if(!f)return;
-  try{m.textContent='Đang đọc file…';const j=JSON.parse(await f.text());
-    if(!j||j.app!=='diktat'||!Array.isArray(j.items))throw new Error('Đây không phải file sao lưu của trang này.');
-    let n=0;for(const o of j.items){
-      for(const k in o){const v=o[k];if(v&&typeof v==='object'&&typeof v.__blob==='string')o[k]=await (await fetch(v.__blob)).blob()}
-      if(o.id==null)continue;await put(o);n++;m.textContent=`Đang nhập ${n}/${j.items.length}…`}
-    m.textContent=`Đã nhập ${n} bài ✓ (bài trùng mã sẽ được ghi đè).`;render()}
-  catch(e){console.error(e);m.textContent='Lỗi khi nhập: '+(e&&e.message||e)}};
+$('bkFile').onchange=async e=>{const fs=[...e.target.files];e.target.value='';if(!fs.length)return;
+  let n=0;const bad=[];
+  for(let fi=0;fi<fs.length;fi++){const f=fs[fi];
+    try{bkMsg(`Đang đọc file ${fi+1}/${fs.length}: ${f.name}…`);const j=JSON.parse(await f.text());
+      if(!j||j.app!=='diktat'||!Array.isArray(j.items))throw new Error('không phải file sao lưu của trang này');
+      for(const o of j.items){
+        for(const k in o){const v=o[k];if(v&&typeof v==='object'&&typeof v.__blob==='string')o[k]=await (await fetch(v.__blob)).blob()}
+        if(o.id==null)continue;await put(o);n++;bkMsg(`Đang nhập… ${n} bài (file ${fi+1}/${fs.length})`)}}
+    catch(err){console.error(err);bad.push(f.name+': '+(err&&err.message||err))}}
+  bkMsg(`Đã nhập ${n} bài ✓ (bài trùng mã sẽ được ghi đè).`+(bad.length?` Lỗi ${bad.length} file – ${bad.join('; ')}`:''));
+  render();renderBk()};
 /* xin trình duyệt giữ dữ liệu bền, không tự dọn khi thiếu dung lượng */
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 
