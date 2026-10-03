@@ -572,7 +572,7 @@ function alignCore(ls,words0,dur,mode){
     if(i>0&&j>0&&b===0){if(sim(S[i-1],words[j-1].t)>=.5)mt[i-1]=j-1;i--;j--}else if(i>0&&(b===1||j===0))i--;else j--}
   const st=Array(N).fill(null),cnt=Array(N).fill(0),mh=Array(N).fill(0),ms=Array.from({length:N},()=>[]),fi=Array(N).fill(-1),la=Array(N).fill(-1),lm=Array(N).fill(0),tm=Array(N).fill(0),ld=Array(N).fill(0),td=Array(N).fill(0);let hit=0;
   for(let k=0;k<n;k++){const i=own[k];cnt[i]++;if(fi[i]<0)fi[i]=k;la[i]=k;if(mt[k]>=0)ms[i].push({w:words[mt[k]],k})}
-  const tokT=t=>Math.max(.28,t.length*.075);   /* ước lượng thời gian đọc 1 từ chưa khớp (giây) */
+  const tokT=t=>Math.max(.38,t.length*.09);   /* ước lượng thời gian đọc 1 từ chưa khớp (giây) */
   /* các từ của 1 dòng phải nằm gần nhau: nếu khớp rải rác (vd. chữ "Ja" khớp nhầm chỗ xa) thì chỉ giữ cụm đông nhất;
      từ đầu/cuối dòng không khớp (Whisper bỏ sót) thì nới biên dòng ra theo thời gian đọc ước lượng */
   for(let i=0;i<N;i++){const m=ms[i].slice().sort((x,y)=>x.w.s-y.w.s);if(!m.length)continue;
@@ -583,7 +583,7 @@ function alignCore(ls,words0,dur,mode){
     const ks=best.map(x=>x.k),k0=Math.min(...ks),k1=Math.max(...ks);let lead=0,trail=0;
     for(let k=fi[i];k<k0;k++)lead+=tokT(S[k]);for(let k=k1+1;k<=la[i];k++)trail+=tokT(S[k]);
     lm[i]=k0-fi[i];tm[i]=la[i]-k1;ld[i]=lead;td[i]=trail;   /* số từ đầu/cuối dòng Whisper không nghe ra (vd. "Ja", "Bitte") + thời gian ước lượng */
-    st[i]=[Math.max(0,Math.min(...best.map(x=>x.w.s))-Math.min(lead,1.5)),Math.min(dur,Math.max(...best.map(x=>x.w.e))+Math.min(trail,1.5))]}
+    st[i]=[Math.max(0,Math.min(...best.map(x=>x.w.s))-Math.min(lead,2.5)),Math.min(dur,Math.max(...best.map(x=>x.w.e))+Math.min(trail,2.5))]}
   if(hit<n*.3)return null;
   const conf=cnt.map((c,i)=>c?mh[i]/c:1);
   /* dòng không khớp được từ nào: chia đều theo số từ trong khoảng giữa hai dòng đã biết */
@@ -600,7 +600,8 @@ function buildSegs(parts,dur,eng){
   const N=parts.length,lo=Math.max(0,parts[0][0]-.15),hi=Math.min(dur,parts[N-1][1]+.25),cuts=[];
   let p95=1;
   if(eng){const so=Float32Array.from(eng).sort();p95=Math.max(so[Math.floor(so.length*.95)],1e-6)}
-  for(let i=0;i<N-1;i++){const e=parts[i][1],s=parts[i+1][0],m=(e+s)/2;let c=m;
+  for(let i=0;i<N-1;i++){const lmI=parts.lm?parts.lm[i+1]:0,tmI=parts.tm?parts.tm[i]:0,ldI=lmI>0?parts.ld[i+1]:0,tdI=tmI>0?parts.td[i]:0;
+    const e=parts[i][1],s=parts[i+1][0]+Math.min(ldI,2.5),m=(e+s)/2;let c=m;   /* s = nơi dòng sau thật sự bắt đầu được nghe (đã trừ phần nới ra phía trước) */
     if(eng){
       /* Whisper hay đặt mốc đầu/cuối câu lệch cỡ nửa giây (nhất là các từ ngắn như "Ja", "bitte", "zurückrufen?") => tìm rộng ±0,5s,
          ưu tiên khoảng lặng THẬT trong audio: càng dài càng tốt, càng gần giữa 2 mốc càng tốt */
@@ -608,12 +609,11 @@ function buildSegs(parts,dur,eng){
       for(let f=a;f<=z+1;f++){const q=f<=z&&eng[f]<th;if(q){if(gs<0)gs=f}else if(gs>=0){if(f-gs>=6)runs.push({t:(gs+f)/2*.01,d:(f-gs)*.01});gs=-1}}
       /* nếu đầu dòng sau / cuối dòng trước bị Whisper bỏ sót chữ ngắn thì chữ đó nằm giữa 2 mốc:
          chọn khoảng lặng sao cho phần "thừa" mỗi bên có độ dài gần với thời gian ước lượng của các từ bị sót */
-      const lmI=parts.lm?parts.lm[i+1]:0,tmI=parts.tm?parts.tm[i]:0,ldI=lmI>0?parts.ld[i+1]:0,tdI=tmI>0?parts.td[i]:0;
       if(runs.length){let best=1e9;
         /* phạt nặng nếu cắt TRƯỚC mốc cuối dòng trước (đang đọc dở), nhất là khi dòng đó bị thiếu chữ ở cuối;
            tương tự cho việc cắt SAU mốc đầu dòng sau. Mốc cuối/đầu đã được nới theo số chữ bị sót */
-        const ke=tmI>0?4:1.5,ks=lmI>0?4:1.5;
-        runs.forEach(r=>{const v=ke*Math.max(0,e-r.t)+ks*Math.max(0,r.t-s)+.3*Math.abs(r.t-m)-2*r.d;if(v<best){best=v;c=r.t}})}
+        const ke=tmI>0?4:1.5,ks=lmI>0?4:1.5,eH=e-Math.min(tdI,2.5);   /* eH = mốc cuối đã nghe thật; phần nới thêm chỉ là ước lượng nên chỉ phạt nhẹ */
+        runs.forEach(r=>{const v=ke*Math.max(0,eH-r.t)+.8*Math.max(0,e-r.t)+ks*Math.max(0,r.t-s)+.3*Math.abs(r.t-m)-2*r.d;if(v<best){best=v;c=r.t}})}
       else{let best=1e9;
         for(let f=a;f<=z;f++){const v=((eng[f-1]||eng[f])+eng[f]+(eng[f+1]||eng[f]))/3/p95+.15*Math.abs(f*.01-m);if(v<best){best=v;c=f*.01+.005}}}}
     cuts.push(c)}
