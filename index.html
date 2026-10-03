@@ -323,7 +323,9 @@ function show(v){V.forEach(i=>$(i).classList.toggle('hide',i!==v));{const el=$(v
 let fromPop=false;
 try{history.replaceState({in:0},'')}catch(e){}
 window.addEventListener('popstate',()=>{fromPop=true;render();show('vHome');fromPop=false});
-$('nHome').onclick=()=>{render();show('vHome')};document.querySelector('.logo').onclick=()=>{render();show('vHome')};$('nAdd').onclick=()=>show('vAdd');$('nBk').onclick=()=>{renderBk();show('vBk')};
+$('nHome').onclick=()=>{render();show('vHome')};document.querySelector('.logo').onclick=()=>{collapseAll();render();show('vHome')};/* rời trang Bài học sang Thêm bài / Sao lưu => thu gọn hết, quay lại chỉ thấy tên đầu mục */
+const collapseAll=()=>{openB.clear();subOff.clear();for(const k in subSel)delete subSel[k]};
+$('nAdd').onclick=()=>{collapseAll();show('vAdd')};$('nBk').onclick=()=>{collapseAll();renderBk();show('vBk')};
 /* home */
 let fxPl=false;const openB=new Set(),subSel={},subOff=new Set();/* subSel: sách -> nhóm nhỏ đang chọn; subOff: sách đang thu gọn khung bài */
 async function render(){
