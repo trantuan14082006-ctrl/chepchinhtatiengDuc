@@ -105,7 +105,6 @@ html{scroll-behavior:smooth}
 
 <div id="vHome">
  <div class="th"><h1>Intensive Listening</h1><input class="srch" id="q" placeholder="🔍  Search"></div>
- <div id="bkWarn" class="hide" style="background:var(--yl2);border:1px solid var(--yl);border-radius:12px;padding:10px 16px;margin:0 0 14px;cursor:pointer;color:var(--tx)"></div>
  <h3>Advanced Dictation</h3>
  <div class="col" id="list"></div><p class="mu" id="empty">Chưa có bài nào. Vào "Thêm bài" để bắt đầu.</p>
 </div>
@@ -113,7 +112,7 @@ html{scroll-behavior:smooth}
 <div id="vBk" class="hide">
  <div class="th"><h1>Sao lưu</h1></div>
  <div class="card">
-  <p class="mu" id="bkPers" style="margin-top:0"></p><p class="mu" style="margin-top:0">Tick bài muốn xuất (tick tên sách để chọn cả nhóm). Có thể xuất gộp 1 file, hoặc mỗi bài 1 file riêng cho dễ cất giữ. Nhập được nhiều file cùng lúc, kể cả file sao lưu cũ.</p>
+  <div id="bkWarn" class="hide" style="background:var(--yl2);border:1px solid var(--yl);border-radius:12px;padding:10px 16px;margin:0 0 12px;color:var(--tx)"></div><p class="mu" id="bkPers" style="margin-top:0"></p><p class="mu" style="margin-top:0">Tick bài muốn xuất (tick tên sách để chọn cả nhóm). Có thể xuất gộp 1 file, hoặc mỗi bài 1 file riêng cho dễ cất giữ. Nhập được nhiều file cùng lúc, kể cả file sao lưu cũ.</p>
   <div class="bkb"><input type="text" id="bkQ" placeholder="🔍 Lọc bài…"><button class="sbtn" id="bkAll">Chọn tất cả</button><button class="sbtn" id="bkNone">Bỏ chọn</button></div>
   <div class="bkl" id="bkList"></div>
   <div class="mu" id="bkInfo"></div>
@@ -346,7 +345,6 @@ let fxPl=false;const openB=new Set(),subSel={},subOff=new Set();/* subSel: sách
 async function render(){
   const q=$('q').value.trim().toLowerCase();
   const ls=(await all()).sort((a,b)=>a.id-b.id).filter(l=>!q||(l.title+' '+(l.book||'')+' '+(l.sub||'')).toLowerCase().includes(q));
-  bkWarn();
   $('empty').classList.toggle('hide',ls.length>0);
   const g={};ls.forEach(l=>(g[l.book||'Khác']=g[l.book||'Khác']||[]).push(l));
   const fx0=fxPl;fxPl=false;
@@ -370,7 +368,7 @@ const fname=s=>(s||'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,'_').replace(/\s+/g
 const itemName=l=>fname((l.book?l.book+' - ':'')+(l.sub?l.sub+' - ':'')+l.title)||'bai';
 const bkMsg=t=>{$('bkMsg').textContent=t};
 async function renderBk(){
-  bkPers();bkAllL=(await all()).sort((a,b)=>a.id-b.id);
+  bkPers();bkWarn();bkAllL=(await all()).sort((a,b)=>a.id-b.id);
   const ids=new Set(bkAllL.map(l=>l.id));[...bkSel].forEach(i=>{if(!ids.has(i))bkSel.delete(i)});
   drawBk()}
 function drawBk(){
@@ -445,9 +443,8 @@ async function bkWarn(){const el=$('bkWarn');if(!el)return;
   try{const ls=await all();if(!ls.length){el.classList.add('hide');return}
     const o=bkGet(),done=new Set(o.ids||[]),n=ls.filter(l=>!done.has(l.id)).length;
     if(!n){el.classList.add('hide');return}
-    el.textContent=o.at?`⚠ Có ${n} bài chưa sao lưu (lần sao lưu gần nhất: ${new Date(o.at).toLocaleDateString('vi-VN')}). Bấm vào đây để vào Sao lưu.`:`⚠ Bạn chưa sao lưu lần nào – ${n} bài đang chỉ nằm trong trình duyệt, lỡ bị xóa là mất. Bấm vào đây để sao lưu.`;
+    el.textContent=o.at?`⚠ Có ${n} bài chưa sao lưu (lần sao lưu gần nhất: ${new Date(o.at).toLocaleDateString('vi-VN')}). Hãy xuất file sao lưu bên dưới.`:`⚠ Bạn chưa sao lưu lần nào – ${n} bài đang chỉ nằm trong trình duyệt, lỡ bị xóa là mất. Hãy xuất file sao lưu bên dưới.`;
     el.classList.remove('hide')}catch(e){el.classList.add('hide')}}
-$('bkWarn').onclick=()=>$('nBk').click();
 async function bkPers(){const el=$('bkPers');if(!el)return;
   try{const ok=navigator.storage&&navigator.storage.persisted&&await navigator.storage.persisted();
     el.textContent=ok?'✅ Trình duyệt đã đồng ý giữ dữ liệu của trang này cố định (không tự dọn khi máy đầy). Vẫn nên sao lưu định kỳ.'
