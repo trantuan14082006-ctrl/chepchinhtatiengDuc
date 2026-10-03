@@ -223,6 +223,21 @@ async function handle(d){
 let chain=Promise.resolve();
 self.onmessage=e=>{chain=chain.then(()=>handle(e.data))};
 </script>
+<div id="tap" class="hide" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px">
+ <div class="tapp" style="background:var(--bg);width:min(680px,100%);box-shadow:0 10px 40px rgba(0,0,0,.35);margin:0">
+   <div class="tn" id="tapn"></div>
+   <div class="tl" id="tapt"></div>
+   <div class="tx" id="tapp"></div>
+   <button class="sbtn p tbig" id="tapgo">⏎ Hết câu (hoặc bấm Space)</button>
+   <div class="row" style="justify-content:center">
+    <button class="sbtn" id="tapundo">↶ Hoàn tác (Z)</button>
+    <button class="sbtn" id="tapx">✕ Dừng (Esc)</button>
+    <label style="display:flex;gap:6px;align-items:center;margin:0">Tốc độ <select id="tapr"><option value="1">1×</option><option value="0.75">0.75×</option><option value="0.5">0.5×</option></select></label>
+    <label style="display:flex;gap:6px;align-items:center;margin:0" title="Người bấm thường chậm hơn tiếng nói một chút, trừ bớt chừng này giây">Bù trễ (giây) <input type="number" id="taplag" value="0.25" step="0.05" min="0" max="1"></label>
+   </div>
+   <p class="mu" style="margin:10px 0 0">Nghe audio, đến khi người nói đọc XONG câu đang hiện thì bấm Space. Bấm nhầm thì bấm Z để nghe lại câu đó.</p>
+ </div>
+</div>
 <script>
 const $=id=>document.getElementById(id);
 let mem=[],db=null,cur=null,url=null,ctx=null,lines=[],trs=[],segs=[],idx=0,tries=0,good=0,timer=null,rate=1,muted=false,showTr=false,ridx=-1,csOn=false,pnOn=true;
@@ -1021,20 +1036,5 @@ $('tl').onclick=e=>{const p=e.target.dataset.p;if(p!==undefined){const s=segs[p]
 $('rback').onclick=()=>show('vMode');
 openDB().then(d=>{db=d;render()});
 </script>
-<div id="tap" class="hide" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px">
- <div class="tapp" style="background:var(--bg);width:min(680px,100%);box-shadow:0 10px 40px rgba(0,0,0,.35);margin:0">
-   <div class="tn" id="tapn"></div>
-   <div class="tl" id="tapt"></div>
-   <div class="tx" id="tapp"></div>
-   <button class="sbtn p tbig" id="tapgo">⏎ Hết câu (hoặc bấm Space)</button>
-   <div class="row" style="justify-content:center">
-    <button class="sbtn" id="tapundo">↶ Hoàn tác (Z)</button>
-    <button class="sbtn" id="tapx">✕ Dừng (Esc)</button>
-    <label style="display:flex;gap:6px;align-items:center;margin:0">Tốc độ <select id="tapr"><option value="1">1×</option><option value="0.75">0.75×</option><option value="0.5">0.5×</option></select></label>
-    <label style="display:flex;gap:6px;align-items:center;margin:0" title="Người bấm thường chậm hơn tiếng nói một chút, trừ bớt chừng này giây">Bù trễ (giây) <input type="number" id="taplag" value="0.25" step="0.05" min="0" max="1"></label>
-   </div>
-   <p class="mu" style="margin:10px 0 0">Nghe audio, đến khi người nói đọc XONG câu đang hiện thì bấm Space. Bấm nhầm thì bấm Z để nghe lại câu đó.</p>
- </div>
-</div>
 </body>
 </html>
