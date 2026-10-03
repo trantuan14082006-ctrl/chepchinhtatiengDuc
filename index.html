@@ -64,6 +64,7 @@ h3{font-size:22px;margin:0 0 18px}
 .card textarea{min-height:110px}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
 .sbtn{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:9px 14px;font:600 14px system-ui;cursor:pointer;color:var(--tx)}.sbtn.p{background:var(--gr);border-color:var(--gr);color:var(--tx)}
+.tapp{background:var(--g);border-radius:16px;padding:18px;margin:12px 0;text-align:center}.tapp .tn{font-weight:700}.tapp .tl{font-size:22px;margin:12px 0;line-height:1.4}.tapp .tx{color:var(--mu,#888);font-size:14px;min-height:20px}.tapp .tbig{font-size:18px;padding:14px 28px;margin:12px 6px 4px}.tapp input[type=number]{width:70px;padding:6px}
 .seg{display:grid;grid-template-columns:28px 1fr 70px 70px 40px;gap:6px;align-items:center;margin:6px 0}.seg input{padding:6px!important;font-size:14px!important}
 .seg.warn{background:var(--yl2);border-radius:8px;padding:3px 4px}.seg .tt{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wmsel{padding:9px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:14px system-ui;max-width:100%}
@@ -178,7 +179,20 @@ html{scroll-behavior:smooth}
   <label>Sách / học phần</label><input type="text" id="ebook"><label>Đề / nhóm nhỏ (tuỳ chọn)</label><input type="text" id="esub"><label>Tên bài</label><input type="text" id="etitle">
   <label>Script (mỗi câu 1 dòng)</label><textarea id="escript"></textarea>
   <label>Bản dịch tiếng Việt (mỗi câu 1 dòng)</label><textarea id="etrans"></textarea>
-  <div class="row"><button class="sbtn" id="eauto">Tự tách lại theo số dòng</button><button class="sbtn p" id="ewh">Tách bằng Whisper</button><select id="wm2" class="wmsel"><option value="tiny">tiny (nhẹ nhất – cho máy yếu)</option><option value="base">base (cân bằng – máy trung bình)</option><option value="small">small (chính xác nhất – nên dùng khi có GPU)</option></select><button class="sbtn" id="eview">👂 Whisper nghe được gì</button><button class="sbtn p" id="esave">Lưu</button><button class="sbtn" id="eback">← Quay lại</button><span class="mu" id="emsg"></span><button class="sbtn hide" id="wskip2">Bỏ qua Whisper</button></div>
+  <div class="row"><button class="sbtn" id="eauto">Tự tách lại theo số dòng</button><button class="sbtn p" id="ewh">Tách bằng Whisper</button><select id="wm2" class="wmsel"><option value="tiny">tiny (nhẹ nhất – cho máy yếu)</option><option value="base">base (cân bằng – máy trung bình)</option><option value="small">small (chính xác nhất – nên dùng khi có GPU)</option></select><button class="sbtn" id="eview">👂 Whisper nghe được gì</button><button class="sbtn p" id="tapbtn">🎯 Bấm Space đánh dấu câu</button><button class="sbtn p" id="esave">Lưu</button><button class="sbtn" id="eback">← Quay lại</button><span class="mu" id="emsg"></span><button class="sbtn hide" id="wskip2">Bỏ qua Whisper</button></div>
+  <div class="tapp hide" id="tap">
+   <div class="tn" id="tapn"></div>
+   <div class="tl" id="tapt"></div>
+   <div class="tx" id="tapp"></div>
+   <button class="sbtn p tbig" id="tapgo">⏎ Hết câu (hoặc bấm Space)</button>
+   <div class="row" style="justify-content:center">
+    <button class="sbtn" id="tapundo">↶ Hoàn tác (Z)</button>
+    <button class="sbtn" id="tapx">✕ Dừng (Esc)</button>
+    <label style="display:flex;gap:6px;align-items:center;margin:0">Tốc độ <select id="tapr"><option value="1">1×</option><option value="0.75">0.75×</option><option value="0.5">0.5×</option></select></label>
+    <label style="display:flex;gap:6px;align-items:center;margin:0" title="Người bấm thường chậm hơn tiếng nói một chút, trừ bớt chừng này giây">Bù trễ (giây) <input type="number" id="taplag" value="0.25" step="0.05" min="0" max="1"></label>
+   </div>
+   <p class="mu" style="margin:10px 0 0">Nghe audio, đến khi người nói đọc XONG câu đang hiện thì bấm Space. Bấm nhầm thì bấm Z để nghe lại câu đó.</p>
+  </div>
   <pre class="wv hide" id="wview"></pre>
   <p class="mu">Chỉnh giây bắt đầu/kết thúc từng câu, bấm ▶ để nghe thử. Dòng có ⚠ = mốc được ước lượng (chưa chắc), không phải lỗi – nghe thử là biết.</p><div id="segs"></div>
  </div>
@@ -854,7 +868,7 @@ hasGPU().then(()=>['wm','wm2'].forEach(id=>{const el=$(id);if(el)el.value=wkey()
 $('esave').onclick=async()=>{const ls=getLines($('escript').value),sg=readSegs();
   if(sg.length!==ls.length){$('emsg').textContent='Số dòng đã đổi – bấm "Tự tách lại" trước.';return}
   cur.book=$('ebook').value.trim();cur.sub=$('esub').value.trim();cur.title=$('etitle').value.trim()||cur.title;$('et').textContent=head();$('mt').textContent=head();cur.script=$('escript').value.trim();cur.trans=$('etrans').value.trim();cur.segs=sg;await put(cur);$('emsg').textContent='Đã lưu ✓';render()};
-$('eback').onclick=()=>show('vMode');
+$('eback').onclick=()=>{if(tapOn)tapStop();show('vMode')};
 /* xem Whisper thực sự nghe được những từ nào và ở giây nào (chữ đã chuẩn hoá: thường, bỏ dấu câu; số nhỏ đổi thành chữ) */
 $('eview').onclick=()=>{const v=$('wview'),w=cur&&cur.words;
   if(!v.classList.contains('hide')){v.classList.add('hide');return}
@@ -862,6 +876,36 @@ $('eview').onclick=()=>{const v=$('wview'),w=cur&&cur.words;
   const L=[];let c=[],t0=0;
   w.forEach((x,i)=>{if(!c.length)t0=x.s;c.push(x.r||x.t);const nx=w[i+1];if(!nx||nx.s-x.e>.6||c.length>=12){L.push(t0.toFixed(1).padStart(6)+'s  '+c.join(' '));c=[]}});
   v.textContent=`Whisper (${cur.wmodel||'?'}) nghe được ${w.length} từ:\n`+L.join('\n');v.classList.remove('hide')};
+/* ===== Bấm Space đánh dấu cuối mỗi câu (không cần Whisper, chính xác nhất) ===== */
+let tapOn=false,tapB=[],tapLs=[];
+function tapShow(){const n=tapLs.length,i=tapB.length;
+  $('tapn').textContent='Câu '+(i+1)+' / '+n;$('tapt').textContent=tapLs[i]||'';$('tapp').textContent=i+1<n?'Tiếp theo: '+tapLs[i+1]:'(câu cuối)'}
+function tapStop(msg){tapOn=false;A.pause();A.onended=null;$('tap').classList.add('hide');$('tapbtn').disabled=false;if(msg)$('emsg').textContent=msg}
+function tapFinish(){
+  const sg=tapLs.map((_,i)=>[i?tapB[i-1]:0,tapB[i]]);
+  cur.segs=sg;cur.conf=null;drawSegs(tapLs,sg,null);
+  tapStop('Đã đánh dấu xong ✓ – bấm ▶ nghe thử vài câu, chỉnh số nếu cần rồi bấm Lưu.')}
+function tapMark(){if(!tapOn)return;const i=tapB.length;if(i>=tapLs.length)return;
+  const lag=(+$('taplag').value||0)*(A.playbackRate||1),prev=i?tapB[i-1]:0;
+  tapB.push(+Math.max(prev+.05,A.currentTime-lag).toFixed(2));
+  if(tapB.length>=tapLs.length)tapFinish();else tapShow()}
+function tapUndo(){if(!tapOn||!tapB.length)return;tapB.pop();A.currentTime=Math.max(0,(tapB.length?tapB[tapB.length-1]:0)-.2);A.play();tapShow()}
+$('tapbtn').onclick=()=>{const ls=getLines($('escript').value);if(!ls.length)return;
+  if(!confirm('Bắt đầu nghe và bấm đánh dấu? Mốc hiện tại sẽ bị thay khi bạn đánh dấu xong.'))return;
+  tapLs=ls;tapB=[];tapOn=true;$('tapbtn').disabled=true;$('emsg').textContent='';$('wview').classList.add('hide');
+  $('tap').classList.remove('hide');if(document.activeElement)document.activeElement.blur();
+  clearInterval(timer);A.currentTime=0;A.playbackRate=+$('tapr').value||1;A.play();
+  A.onended=()=>{if(tapOn)tapStop('Audio đã hết mà còn '+(tapLs.length-tapB.length)+' câu chưa đánh dấu – mốc cũ giữ nguyên, bạn thử lại nhé.')};
+  tapShow()};
+$('tapgo').onclick=()=>{tapMark();$('tapgo').blur()};
+$('tapundo').onclick=()=>{tapUndo();$('tapundo').blur()};
+$('tapx').onclick=()=>tapStop('Đã dừng, mốc cũ giữ nguyên.');
+$('tapr').onchange=()=>{A.playbackRate=+$('tapr').value||1;$('tapr').blur()};
+document.addEventListener('keydown',e=>{if(!tapOn)return;
+  if(e.code==='Space'){e.preventDefault();if(!e.repeat)tapMark()}
+  else if(e.key==='z'||e.key==='Z'||e.key==='Backspace'){e.preventDefault();tapUndo()}
+  else if(e.key==='Escape')tapStop('Đã dừng, mốc cũ giữ nguyên.')});
+document.addEventListener('keyup',e=>{if(tapOn&&e.code==='Space')e.preventDefault()});
 /* listen & type */
 function startPractice(){setAudio(cur.audio);lines=getLines(cur.script);segs=cur.segs;idx=0;good=0;
   $('ttl').textContent='Advanced Dictation / '+head();$('pdone').classList.add('hide');$('pmain').classList.remove('hide');show('vType');go(0)}
