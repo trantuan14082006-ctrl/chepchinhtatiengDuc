@@ -282,7 +282,7 @@ try{history.replaceState({in:0},'')}catch(e){}
 window.addEventListener('popstate',()=>{fromPop=true;render();show('vHome');fromPop=false});
 $('nHome').onclick=()=>{render();show('vHome')};document.querySelector('.logo').onclick=()=>{render();show('vHome')};$('nAdd').onclick=()=>show('vAdd');
 /* home */
-const openB=new Set(),subSel={};/* subSel: sách -> nhóm nhỏ đang chọn */
+const openB=new Set(),subSel={},subOff=new Set();/* subSel: sách -> nhóm nhỏ đang chọn; subOff: sách đang thu gọn khung bài */
 async function render(){
   const q=$('q').value.trim().toLowerCase();
   const ls=(await all()).sort((a,b)=>a.id-b.id).filter(l=>!q||(l.title+' '+(l.book||'')+' '+(l.sub||'')).toLowerCase().includes(q));
@@ -291,7 +291,7 @@ async function render(){
   $('list').innerHTML=Object.keys(g).map(k=>{
     /* khung 2 (trái): các nhóm nhỏ; bài không có nhóm thì nằm trong 1 ô mang tên sách. Khung 3 (phải): bài của nhóm đang chọn */
     const sb={};g[k].forEach(l=>{const n=l.sub||k;(sb[n]=sb[n]||[]).push(l)});
-    const sk=Object.keys(sb),sel=sb[subSel[k]]?subSel[k]:(sk.length===1||q?sk[0]:null);
+    const sk=Object.keys(sb),sel=subOff.has(k)&&!q?null:(sb[subSel[k]]?subSel[k]:(sk.length===1||q?sk[0]:null));
     return `<div class="acc ${openB.has(k)||q?'open':''}"><div class="ah" data-k="${esc(k)}"><em class="nm">${esc(k)}</em><b class="ed" data-k="${esc(k)}" title="Đổi tên học phần">✎ Đổi tên</b><span>⌄</span></div><div class="ab"><div class="subs">`
       +sk.map(n=>`<div class="sub${n===sel?' on':''}" data-b="${esc(k)}" data-s="${esc(n)}">${esc(n)}</div>`).join('')
       +'</div><div class="pl">'+(sel?sb[sel].map(l=>`<div class="pill" data-id="${l.id}">${esc(l.title)}</div>`).join(''):'')+'</div></div></div>'}).join('');
@@ -303,7 +303,9 @@ $('list').onclick=async e=>{
     if(nv&&nv.trim()){const nn=nv.trim();for(const l of await all())if((l.book||'Khác')===k){l.book=nn;await put(l)}
       if(openB.has(k)){openB.delete(k);openB.add(nn)}render()}return}
   const sbx=e.target.closest('.sub');
-  if(sbx){subSel[sbx.dataset.b]=sbx.dataset.s;render();return}
+  if(sbx){const b=sbx.dataset.b;/* bấm lại ô đang chọn => thu gọn các bài; bấm lần nữa (hoặc ô khác) => mở lại */
+    if(sbx.classList.contains('on')&&!$('q').value.trim())subOff.add(b);else{subSel[b]=sbx.dataset.s;subOff.delete(b)}
+    render();return}
   const ah=e.target.closest('.ah'),pl=e.target.closest('.pill');
   if(ah){const k=ah.dataset.k;openB.has(k)?openB.delete(k):openB.add(k);ah.parentNode.classList.toggle('anim',!openB.has(k)?false:true);ah.parentNode.classList.toggle('open')}
   if(pl){cur=(await all()).find(x=>x.id==pl.dataset.id);$('mt').textContent=(cur.book?cur.book+' - ':'')+cur.title;show('vMode')}
