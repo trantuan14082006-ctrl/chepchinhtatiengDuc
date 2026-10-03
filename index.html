@@ -93,14 +93,21 @@ html{scroll-behavior:smooth}
 </head>
 <body>
 <header class="hd"><div class="logo"><b>D</b>Diktat Dashboard</div>
-<nav><a id="nHome" class="act">Bài học</a><a id="nAdd">Thêm bài</a></nav></header>
+<nav><a id="nHome" class="act">Bài học</a><a id="nAdd">Thêm bài</a><a id="nBk">Sao lưu</a></nav></header>
 <main>
 
 <div id="vHome">
  <div class="th"><h1>Intensive Listening</h1><input class="srch" id="q" placeholder="🔍  Search"></div>
  <h3>Advanced Dictation</h3>
  <div class="col" id="list"></div><p class="mu" id="empty">Chưa có bài nào. Vào "Thêm bài" để bắt đầu.</p>
- <div class="row bk"><button class="sbtn" id="bkOut">⬇ Xuất sao lưu</button><button class="sbtn" id="bkIn">⬆ Nhập sao lưu</button><input type="file" id="bkFile" accept=".json,application/json" class="hide"><span class="mu" id="bkMsg"></span></div>
+</div>
+
+<div id="vBk" class="hide">
+ <div class="th"><h1>Sao lưu</h1></div>
+ <div class="card">
+  <p class="mu" style="margin-top:0">Xuất toàn bộ bài (kèm audio) ra 1 file .json để cất giữ, hoặc nhập lại file đó khi cần khôi phục.</p>
+  <div class="row bk"><button class="sbtn" id="bkOut">⬇ Xuất sao lưu</button><button class="sbtn" id="bkIn">⬆ Nhập sao lưu</button><input type="file" id="bkFile" accept=".json,application/json" class="hide"><span class="mu" id="bkMsg"></span></div>
+ </div>
 </div>
 
 <div id="vMode" class="hide">
@@ -283,15 +290,15 @@ setInterval(()=>bars.forEach(f=>f()),120);
 mkBar('bar1',A,()=>segs[idx]||[0,1],()=>replay());
 mkBar('bar2',R,()=>[0,R.duration||.01],()=>{clearInterval(timer);R.paused?R.play():R.pause()});
 /* navigation */
-const V=['vHome','vMode','vType','vRead','vAdd','vEdit'];
+const V=['vHome','vMode','vType','vRead','vAdd','vEdit','vBk'];
 function show(v){V.forEach(i=>$(i).classList.toggle('hide',i!==v));{const el=$(v);el.classList.remove('vin');void el.offsetWidth;el.classList.add('vin')}A.pause();R.pause();clearInterval(timer);
-  $('nHome').classList.toggle('act',v!=='vAdd');$('nAdd').classList.toggle('act',v==='vAdd');scrollTo(0,0);
+  $('nHome').classList.toggle('act',v!=='vAdd'&&v!=='vBk');$('nAdd').classList.toggle('act',v==='vAdd');$('nBk').classList.toggle('act',v==='vBk');scrollTo(0,0);
   try{if(!fromPop){const inner=v!=='vHome',st=history.state&&history.state.in;
     if(inner&&!st)history.pushState({in:1},'');else if(!inner&&st)history.back()}}catch(e){}}
 let fromPop=false;
 try{history.replaceState({in:0},'')}catch(e){}
 window.addEventListener('popstate',()=>{fromPop=true;render();show('vHome');fromPop=false});
-$('nHome').onclick=()=>{render();show('vHome')};document.querySelector('.logo').onclick=()=>{render();show('vHome')};$('nAdd').onclick=()=>show('vAdd');
+$('nHome').onclick=()=>{render();show('vHome')};document.querySelector('.logo').onclick=()=>{render();show('vHome')};$('nAdd').onclick=()=>show('vAdd');$('nBk').onclick=()=>show('vBk');
 /* home */
 let fxPl=false;const openB=new Set(),subSel={},subOff=new Set();/* subSel: sách -> nhóm nhỏ đang chọn; subOff: sách đang thu gọn khung bài */
 async function render(){
@@ -348,8 +355,7 @@ $('list').onclick=async e=>{
   const ah=e.target.closest('.ah'),pl=e.target.closest('.pill');
   if(ah){const k=ah.dataset.k,acc=ah.parentNode,q=$('q').value.trim(),on=acc.querySelector('.sub.on');
     const reset=()=>{delete subSel[k];subOff.delete(k);const o=acc.querySelector('.sub.on');if(o)o.classList.remove('on');const pl=acc.querySelector('.pl');if(pl)pl.innerHTML=''};
-    if(!q&&acc.classList.contains('open')&&on){reset()}               /* đang xem bài => thu về chỉ còn ô nhóm (ảnh 1) */
-    else if(acc.classList.contains('open')){openB.delete(k);if(!q)delete subSel[k];acc.classList.remove('open')}   /* chỉ còn ô nhóm => đóng hẳn */
+    if(acc.classList.contains('open')){openB.delete(k);if(!q){delete subSel[k];subOff.delete(k)}acc.classList.remove('open')}   /* đang mở => bấm 1 lần là thu gọn hết (cả nhóm nhỏ lẫn bài) */
     else{if(!q)reset();openB.add(k);acc.classList.add('open')}         /* mở: luôn bắt đầu với chỉ ô nhóm */
   }
   if(pl){cur=(await all()).find(x=>x.id==pl.dataset.id);$('mt').textContent=(cur.book?cur.book+' - ':'')+cur.title;show('vMode')}
