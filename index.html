@@ -232,7 +232,19 @@ const getLines=s=>{s=(s||'').replace(/\r/g,'').trim();
   if(/\n[ \t]*\n/.test(s))return s.split(/\n[ \t]*\n/).map(b=>b.split('\n').map(x=>x.trim()).filter(Boolean).join(' ')).filter(Boolean);
   return s.split('\n').map(x=>x.trim()).filter(Boolean)};
 /* storage */
-function openDB(){return new Promise(r=>{try{const q=indexedDB.open('diktat',1);q.onupgradeneeded=()=>q.result.createObjectStore('l',{keyPath:'id'});q.onsuccess=()=>r(q.result);q.onerror=()=>r(null)}catch(e){r(null)}})}
+/* mở kho dữ liệu; lỗi thì HIỆN RÕ lên đầu trang (trước đây lỗi bị im lặng => trang trống như mất hết bài) */
+function dbFail(e){const n=(e&&e.name)||'',m=(e&&e.message)||'';console.error('IndexedDB',e);
+  let el=document.getElementById('dbErr');
+  if(!el){el=document.createElement('div');el.id='dbErr';el.style.cssText='background:#fde8e4;color:#7a1d0f;border-bottom:2px solid #c0341d;padding:12px 18px;font:600 14px system-ui;position:sticky;top:0;z-index:70';document.body.prepend(el)}
+  el.textContent='⚠ Không mở được kho dữ liệu của trình duyệt ('+(n||'lỗi')+(m?': '+m:'')+'). Bài cũ có thể vẫn còn nhưng đang không hiện – ĐỪNG thêm bài mới lúc này. Hãy chụp dòng này gửi cho người hỗ trợ.'}
+function openDB(){return new Promise(r=>{
+  const tryOpen=ver=>{try{const q=ver?indexedDB.open('diktat',ver):indexedDB.open('diktat');   /* không có số phiên bản = mở đúng phiên bản đang có (tránh VersionError) */
+    q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains('l'))q.result.createObjectStore('l',{keyPath:'id'})};
+    q.onblocked=()=>dbFail({name:'Blocked',message:'hãy đóng các tab khác của trang này rồi tải lại'});
+    q.onsuccess=()=>{const d=q.result;if(!d.objectStoreNames.contains('l')){d.close();dbFail({name:'NoStore',message:'không thấy kho bài'});r(null);return}
+      d.onversionchange=()=>d.close();r(d)};
+    q.onerror=()=>{if(ver)tryOpen(0);else{dbFail(q.error);r(null)}}}catch(e){dbFail(e);r(null)}};
+  tryOpen(1)})}
 const all=()=>new Promise(r=>{if(!db)return r(mem);try{const q=db.transaction('l').objectStore('l').getAll();q.onsuccess=()=>r(q.result);q.onerror=()=>r(mem)}catch(e){r(mem)}});
 const put=x=>new Promise(r=>{mem=mem.filter(m=>m.id!==x.id);mem.push(x);if(!db)return r();try{const t=db.transaction('l','readwrite');t.objectStore('l').put(x);t.oncomplete=()=>r();t.onerror=()=>r()}catch(e){r()}});
 const del=id=>new Promise(r=>{mem=mem.filter(x=>x.id!==id);if(!db)return r();try{const t=db.transaction('l','readwrite');t.objectStore('l').delete(id);t.oncomplete=()=>r()}catch(e){r()}});
