@@ -577,7 +577,7 @@ function alignCore(ls,words0,dur,mode){
      từ đầu/cuối dòng không khớp (Whisper bỏ sót) thì nới biên dòng ra theo thời gian đọc ước lượng */
   for(let i=0;i<N;i++){const m=ms[i].slice().sort((x,y)=>x.w.s-y.w.s);if(!m.length)continue;
     let best=[],c=[m[0]];
-    for(let q=1;q<m.length;q++){if(m[q].w.s-c[c.length-1].w.e>3){if(c.length>best.length)best=c;c=[]}c.push(m[q])}
+    for(let q=1;q<m.length;q++){if(m[q].w.s-c[c.length-1].w.e>5){if(c.length>best.length)best=c;c=[]}c.push(m[q])}
     if(c.length>best.length)best=c;
     mh[i]=best.length;hit+=best.length;
     const ks=best.map(x=>x.k),k0=Math.min(...ks),k1=Math.max(...ks);let lead=0,trail=0;
@@ -601,16 +601,20 @@ function buildSegs(parts,dur,eng){
   let p95=1;
   if(eng){const so=Float32Array.from(eng).sort();p95=Math.max(so[Math.floor(so.length*.95)],1e-6)}
   for(let i=0;i<N-1;i++){const e=parts[i][1],s=parts[i+1][0],m=(e+s)/2;let c=m;
-    if(eng){const a=Math.max(0,Math.floor((Math.min(e,s)-.1)*100)),z=Math.min(eng.length-1,Math.ceil((Math.max(e,s)+.1)*100));let best=1e9;
-      /* nếu đầu dòng sau / cuối dòng trước bị Whisper bỏ sót chữ ngắn (Ja, Bitte…) thì chữ đó nằm trong khoảng giữa 2 mốc:
-         chọn khoảng lặng sao cho phần "thừa" bên nào có độ dài gần với thời gian ước lượng của các từ bị sót */
-      const lmI=parts.lm?parts.lm[i+1]:0,tmI=parts.tm?parts.tm[i]:0;
-      if(lmI>0||tmI>0){const th=p95*.06,runs=[];let gs=-1;
-        for(let f=a;f<=z+1;f++){const q=f<=z&&eng[f]<th;if(q){if(gs<0)gs=f}else if(gs>=0){if(f-gs>=4)runs.push((gs+f)/2*.01);gs=-1}}
-        const ldI=lmI>0?parts.ld[i+1]:0,tdI=tmI>0?parts.td[i]:0;
-        runs.forEach(t=>{const v=Math.abs(t-e-tdI)+Math.abs(s-t-ldI);if(v<best){best=v;c=t}});
-        if(runs.length)best=-1}
-      if(best!==-1){best=1e9;
+    if(eng){
+      /* Whisper hay đặt mốc đầu/cuối câu lệch cỡ nửa giây (nhất là các từ ngắn như "Ja", "bitte", "zurückrufen?") => tìm rộng ±0,5s,
+         ưu tiên khoảng lặng THẬT trong audio: càng dài càng tốt, càng gần giữa 2 mốc càng tốt */
+      const W=.5,a=Math.max(0,Math.floor((Math.min(e,s)-W)*100)),z=Math.min(eng.length-1,Math.ceil((Math.max(e,s)+W)*100)),th=p95*.07,runs=[];let gs=-1;
+      for(let f=a;f<=z+1;f++){const q=f<=z&&eng[f]<th;if(q){if(gs<0)gs=f}else if(gs>=0){if(f-gs>=6)runs.push({t:(gs+f)/2*.01,d:(f-gs)*.01});gs=-1}}
+      /* nếu đầu dòng sau / cuối dòng trước bị Whisper bỏ sót chữ ngắn thì chữ đó nằm giữa 2 mốc:
+         chọn khoảng lặng sao cho phần "thừa" mỗi bên có độ dài gần với thời gian ước lượng của các từ bị sót */
+      const lmI=parts.lm?parts.lm[i+1]:0,tmI=parts.tm?parts.tm[i]:0,ldI=lmI>0?parts.ld[i+1]:0,tdI=tmI>0?parts.td[i]:0;
+      if(runs.length){let best=1e9;
+        /* phạt nặng nếu cắt TRƯỚC mốc cuối dòng trước (đang đọc dở), nhất là khi dòng đó bị thiếu chữ ở cuối;
+           tương tự cho việc cắt SAU mốc đầu dòng sau. Mốc cuối/đầu đã được nới theo số chữ bị sót */
+        const ke=tmI>0?4:1.5,ks=lmI>0?4:1.5;
+        runs.forEach(r=>{const v=ke*Math.max(0,e-r.t)+ks*Math.max(0,r.t-s)+.3*Math.abs(r.t-m)-2*r.d;if(v<best){best=v;c=r.t}})}
+      else{let best=1e9;
         for(let f=a;f<=z;f++){const v=((eng[f-1]||eng[f])+eng[f]+(eng[f+1]||eng[f]))/3/p95+.15*Math.abs(f*.01-m);if(v<best){best=v;c=f*.01+.005}}}}
     cuts.push(c)}
   for(let i=0;i<cuts.length;i++){const prev=i?cuts[i-1]:lo;if(cuts[i]<prev+.05)cuts[i]=prev+.05}
