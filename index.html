@@ -623,7 +623,8 @@ $('save').onclick=async()=>{
   btn.disabled=false;render();
 };
 /* ===== Whisper: nhận diện giọng nói trong trình duyệt rồi đối chiếu với script ===== */
-const WM={tiny:'onnx-community/whisper-tiny',base:'onnx-community/whisper-base',small:'onnx-community/whisper-small'};
+/* bản "_timestamped" có xuất cross-attention => mới lấy được mốc thời gian theo từng từ (bản thường báo lỗi "must contain cross attentions") */
+const WM={tiny:'onnx-community/whisper-tiny_timestamped',base:'onnx-community/whisper-base_timestamped',small:'onnx-community/whisper-small_timestamped'};
 let asr=null,asrKey='';
 let gpuOK=!!navigator.gpu,gpuP=null;
 /* navigator.gpu có chưa chắc máy có GPU dùng được => hỏi adapter thật */
