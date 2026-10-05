@@ -771,14 +771,33 @@ function buildSegs(parts,dur,eng,extra){
     const th=p95*.07,sil=(x,y)=>{const r=[];let gs=-1;const f0=Math.max(0,Math.floor(x*100)),f1=Math.min(eng.length-1,Math.floor(y*100));
       for(let f=f0;f<=f1+1;f++){const q=f<=f1&&eng[f]<th;if(q){if(gs<0)gs=f}else if(gs>=0){if(f-gs>=4)r.push((gs+f)/2*.01);gs=-1}}return r};
     for(let i=0;i<N-1;i++){
-      const g=extra.filter(x=>x.s>=parts[i][1]-.05&&x.e<=parts[i+1][0]+.05);
+      /* biên THẬT của 2 dòng (đã trừ phần nới ra theo ước lượng – phần nới đó có thể đã "nuốt" luôn tiếng thừa như "B") */
+      const rE=parts[i][1]-(parts.tm&&parts.tm[i]>0?Math.min(parts.td[i],2.5):0),rS=parts[i+1][0]+(parts.lm&&parts.lm[i+1]>0?Math.min(parts.ld[i+1],2.5):0);
+      /* Whisper nghe sai 1 từ của chính câu (vd. "Maria" -> "Boris") cũng thành "tiếng thừa" nằm sát từ đã khớp => KHÔNG phải nhãn "B" riêng.
+         Khi câu trước thiếu chữ cuối (tm>0) / câu sau thiếu chữ đầu (lm>0): chỉ coi là tiếng thừa thật nếu nó tách khỏi lời bằng 1 quãng lặng >= 0,15s */
+      const lowRun=(x,y)=>{let b=0,c=0;const f0=Math.max(0,Math.floor(x*100)),f1=Math.min(eng.length-1,Math.floor(y*100));for(let f=f0;f<=f1;f++){if(eng[f]<th){c++;if(c>b)b=c}else c=0}return b*.01};
+      const amb1=parts.tm&&parts.tm[i]>0,amb2=parts.lm&&parts.lm[i+1]>0;
+      const g=extra.filter(x=>{const c=(x.s+x.e)/2;if(c<rE-.05||c>rS+.05)return false;
+        if(amb1&&lowRun(x.s-.35,x.s+.1)<.15)return false;
+        if(amb2&&lowRun(x.e-.1,x.e+.35)<.15)return false;
+        return true});
       if(!g.length)continue;
       const gs=Math.min(...g.map(x=>x.s)),ge=Math.max(...g.map(x=>x.e));
-      if(ge-gs<.12)continue;   /* chỉ 1 tiếng rất ngắn: coi như nhiễu, không chừa hở */
+      if(ge-gs<.08)continue;   /* chỉ 1 tiếng cực ngắn: coi như nhiễu, không chừa hở */
       const r1=sil(Math.max(starts[i]+.1,gs-.6),gs+.05),r2=sil(ge-.05,ge+.6);
       let e1=r1.length?r1[r1.length-1]:gs-.06,s2=r2.length?r2[0]:ge+.06;
       e1=Math.max(e1,starts[i]+.1);s2=Math.max(s2,e1+.02);
-      ends[i]=e1;starts[i+1]=s2}}
+      ends[i]=e1;starts[i+1]=s2}
+    /* tiếng thừa TRƯỚC câu đầu (vd. "B", số track) => câu đầu bắt đầu sau nó */
+    const rS0=parts[0][0]+(parts.lm&&parts.lm[0]>0?Math.min(parts.ld[0],2.5):0);
+    const g0=extra.filter(x=>(x.s+x.e)/2<rS0+.05);
+    if(g0.length){const gs=Math.min(...g0.map(x=>x.s)),ge=Math.max(...g0.map(x=>x.e));
+      if(ge-gs>=.08){const r2=sil(ge-.05,ge+.6);starts[0]=Math.min(Math.max(r2.length?r2[0]:ge+.06,lo),ends[0]-.1)}}
+    /* tiếng thừa SAU câu cuối => câu cuối kết thúc trước nó */
+    const rE1=parts[N-1][1]-(parts.tm&&parts.tm[N-1]>0?Math.min(parts.td[N-1],2.5):0);
+    const g1=extra.filter(x=>(x.s+x.e)/2>rE1-.05);
+    if(g1.length){const gs=Math.min(...g1.map(x=>x.s)),ge=Math.max(...g1.map(x=>x.e));
+      if(ge-gs>=.08){const r1=sil(Math.max(starts[N-1]+.1,gs-.6),gs+.05);ends[N-1]=Math.max(r1.length?r1[r1.length-1]:gs-.06,starts[N-1]+.1)}}}
   return ends.map((e,i)=>[+starts[i].toFixed(2),+Math.max(e,starts[i]+.05).toFixed(2)]);
 }
 /* Whisper chạy trong Web Worker => trang không bị đứng hình. Có WebGPU thì dùng GPU (nhanh), không thì CPU (wasm, bản q8 nhẹ) */
@@ -802,14 +821,14 @@ function preloadWhisper(){
 async function runWhisper(a,key,say){
   const g=await hasGPU();
   return new Promise((res,rej)=>{
-    const w=getWorker();let timer=null,t0=0;
-    const stop=()=>{clearInterval(timer);w.onmessage=w.onerror=null;cancelW=null;skipBtns(false)};
+    const w=getWorker();let timer=null,t0=0,fin=false;
+    const stop=()=>{fin=true;clearInterval(timer);w.onmessage=w.onerror=null;cancelW=null;skipBtns(false)};
     cancelW=()=>{stop();killWorker();const e=new Error('skip');e.skip=true;rej(e)};skipBtns(true);
     w.onmessage=e=>{const d=e.data;
       if(d.type==='prog')say(`Đang tải mô hình Whisper ${key}… ${Math.round(d.p)}% (${d.f})`);
       else if(d.type==='load')say(`Đang nạp mô hình Whisper ${key} vào bộ nhớ…`);
-      else if(d.type==='ready'){t0=Date.now();const gpu=d.device==='webgpu';
-        const tick=()=>say(`Đang nhận diện giọng nói bằng ${gpu?'GPU':'CPU'}… ${Math.round((Date.now()-t0)/1000)}s (trang vẫn dùng bình thường)`);
+      else if(d.type==='ready'){clearInterval(timer);t0=Date.now();const gpu=d.device==='webgpu';   /* WebGPU lỗi => worker gửi 'ready' lần 2 (CPU): phải xoá timer cũ, nếu không nó chạy mãi và đè mọi thông báo */
+        const tick=()=>{if(!fin)say(`Đang nhận diện giọng nói bằng ${gpu?'GPU':'CPU'}… ${Math.round((Date.now()-t0)/1000)}s (trang vẫn dùng bình thường)`)};
         tick();timer=setInterval(tick,1000)}
       else if(d.type==='done'){stop();res(d.chunks||[])}
       else if(d.type==='err'){stop();killWorker();rej(new Error(d.msg))}};
