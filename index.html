@@ -112,11 +112,11 @@ html{scroll-behavior:smooth}
 <div id="vBk" class="hide">
  <div class="th"><h1>Sao lưu</h1></div>
  <div class="card">
-  <div id="bkWarn" class="hide" style="background:var(--yl2);border:1px solid var(--yl);border-radius:12px;padding:10px 16px;margin:0 0 12px;color:var(--tx)"></div><p class="mu" id="bkPers" style="margin-top:0"></p><p class="mu" style="margin-top:0">Tick bài muốn xuất (tick tên sách để chọn cả nhóm). Có thể xuất gộp 1 file, hoặc mỗi bài 1 file riêng cho dễ cất giữ. Nhập được nhiều file cùng lúc, kể cả file sao lưu cũ.</p>
+  <div id="bkWarn" class="hide" style="background:var(--yl2);border:1px solid var(--yl);border-radius:12px;padding:10px 16px;margin:0 0 12px;color:var(--tx)"></div><p class="mu" id="bkPers" style="margin-top:0"></p><p class="mu" style="margin-top:0">Tick bài muốn xuất (tick tên sách để chọn cả nhóm). Xuất ra file .zip (data.json + thư mục audio/ chứa file mp3/wav gốc). Có thể xuất gộp 1 file, hoặc mỗi bài 1 file riêng (nhẹ RAM hơn khi có nhiều bài). Nhập được nhiều file .zip cùng lúc, kể cả file .json sao lưu kiểu cũ.</p>
   <div class="bkb"><input type="text" id="bkQ" placeholder="🔍 Lọc bài…"><button class="sbtn" id="bkAll">Chọn tất cả</button><button class="sbtn" id="bkNone">Bỏ chọn</button></div>
   <div class="bkl" id="bkList"></div>
   <div class="mu" id="bkInfo"></div>
-  <div class="row"><button class="sbtn p" id="bkOutSel">⬇ Xuất 1 file</button><button class="sbtn" id="bkOutEach">⬇ Mỗi bài 1 file</button><button class="sbtn" id="bkIn">⬆ Nhập sao lưu</button><input type="file" id="bkFile" accept=".json,application/json" multiple class="hide"></div>
+  <div class="row"><button class="sbtn p" id="bkOutSel">⬇ Xuất 1 file</button><button class="sbtn" id="bkOutEach">⬇ Mỗi bài 1 file</button><button class="sbtn" id="bkIn">⬆ Nhập sao lưu</button><input type="file" id="bkFile" accept=".zip,.json,application/zip,application/json" multiple class="hide"></div>
   <div class="mu" id="bkMsg" style="margin-top:10px"></div>
  </div>
 </div>
@@ -251,17 +251,45 @@ function dbFail(e){const n=(e&&e.name)||'',m=(e&&e.message)||'';console.error('I
   let el=document.getElementById('dbErr');
   if(!el){el=document.createElement('div');el.id='dbErr';el.style.cssText='background:#fde8e4;color:#7a1d0f;border-bottom:2px solid #c0341d;padding:12px 18px;font:600 14px system-ui;position:sticky;top:0;z-index:70';document.body.prepend(el)}
   el.textContent='⚠ Không mở được kho dữ liệu của trình duyệt ('+(n||'lỗi')+(m?': '+m:'')+'). Bài cũ có thể vẫn còn nhưng đang không hiện – ĐỪNG thêm bài mới lúc này. Hãy chụp dòng này gửi cho người hỗ trợ.'}
+function segDur(s){let d=0;if(Array.isArray(s))for(const p of s)if(Array.isArray(p)&&p[1]>d)d=p[1];return d}
+const fmtDur=t=>t?Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0'):'';
+/* Kiến trúc kho dữ liệu (DB v2):
+   - 'l' : thông tin bài (tên, script, bản dịch, mốc segs, asize = dung lượng audio, dur = thời lượng) – NHẸ, trang chủ chỉ đọc kho này
+   - 'a' : {id, audio:Blob} – chỉ đọc khi mở 1 bài (get) hoặc khi xuất sao lưu (getAudio) */
 function openDB(){return new Promise(r=>{
   const tryOpen=ver=>{try{const q=ver?indexedDB.open('diktat',ver):indexedDB.open('diktat');   /* không có số phiên bản = mở đúng phiên bản đang có (tránh VersionError) */
-    q.onupgradeneeded=()=>{if(!q.result.objectStoreNames.contains('l'))q.result.createObjectStore('l',{keyPath:'id'})};
+    q.onupgradeneeded=e=>{const d=q.result,tx=q.transaction;
+      if(!d.objectStoreNames.contains('l'))d.createObjectStore('l',{keyPath:'id'});
+      if(!d.objectStoreNames.contains('a'))d.createObjectStore('a',{keyPath:'id'});
+      if(e.oldVersion===1){   /* nâng cấp v1 -> v2: tách audio ra kho 'a'. Duyệt từng bản ghi một nên không nạp cả kho vào RAM */
+        const L=tx.objectStore('l'),Au=tx.objectStore('a'),c=L.openCursor();
+        c.onsuccess=()=>{const cu=c.result;if(!cu)return;const v=cu.value;
+          if(v.audio instanceof Blob){Au.put({id:v.id,audio:v.audio});v.asize=v.audio.size;v.dur=segDur(v.segs);delete v.audio;cu.update(v)}
+          cu.continue()}}};
     q.onblocked=()=>dbFail({name:'Blocked',message:'hãy đóng các tab khác của trang này rồi tải lại'});
-    q.onsuccess=()=>{const d=q.result;if(!d.objectStoreNames.contains('l')){d.close();dbFail({name:'NoStore',message:'không thấy kho bài'});r(null);return}
+    q.onsuccess=()=>{const d=q.result;if(!d.objectStoreNames.contains('l')||!d.objectStoreNames.contains('a')){d.close();dbFail({name:'NoStore',message:'không thấy kho bài/kho audio (nâng cấp cấu trúc chưa thành công)'});r(null);return}
       d.onversionchange=()=>d.close();r(d)};
     q.onerror=()=>{if(ver)tryOpen(0);else{dbFail(q.error);r(null)}}}catch(e){dbFail(e);r(null)}};
-  tryOpen(1)})}
-const all=()=>new Promise(r=>{if(!db)return r(mem);try{const q=db.transaction('l').objectStore('l').getAll();q.onsuccess=()=>r(q.result);q.onerror=()=>r(mem)}catch(e){r(mem)}});
-const put=x=>new Promise(r=>{mem=mem.filter(m=>m.id!==x.id);mem.push(x);if(!db)return r();try{const t=db.transaction('l','readwrite');t.objectStore('l').put(x);t.oncomplete=()=>r();t.onerror=()=>r()}catch(e){r()}});
-const del=id=>new Promise(r=>{mem=mem.filter(x=>x.id!==id);if(!db)return r();try{const t=db.transaction('l','readwrite');t.objectStore('l').delete(id);t.oncomplete=()=>r()}catch(e){r()}});
+  tryOpen(2)})}
+const strip=x=>{const {audio,...m}=x;if(audio&&m.asize==null)m.asize=audio.size;return m};
+/* all(): CHỈ thông tin bài, không có audio */
+const all=()=>new Promise(r=>{if(!db)return r(mem.map(strip));try{const q=db.transaction('l').objectStore('l').getAll();q.onsuccess=()=>r(q.result.map(strip));q.onerror=()=>r(mem.map(strip))}catch(e){r(mem.map(strip))}});
+/* get(id): thông tin bài + audio của ĐÚNG bài đó (gọi khi người dùng bấm vào bài) */
+const get=id=>new Promise(r=>{id=Number(id);const mm=()=>mem.find(x=>x.id===id)||null;if(!db)return r(mm());
+  try{const t=db.transaction(['l','a']),q1=t.objectStore('l').get(id),q2=t.objectStore('a').get(id);
+    t.oncomplete=()=>{const m=q1.result;if(!m)return r(null);if(q2.result&&q2.result.audio)m.audio=q2.result.audio;r(m)};
+    t.onerror=t.onabort=()=>r(mm())}catch(e){r(mm())}});
+const getAudio=id=>new Promise(r=>{id=Number(id);const mm=()=>{const x=mem.find(o=>o.id===id);return x&&x.audio||null};if(!db)return r(mm());
+  try{const q=db.transaction('a').objectStore('a').get(id);q.onsuccess=()=>r(q.result&&q.result.audio||null);q.onerror=()=>r(mm())}catch(e){r(mm())}});
+/* put(x): luôn chỉ ghi phần thông tin vào kho 'l'. Chỉ ghi audio (kho 'a') khi withAudio=true: bài mới thêm / bài nhập từ sao lưu */
+const put=(x,withAudio)=>new Promise(r=>{
+  const m=strip(x),au=x.audio instanceof Blob?x.audio:null;if(au)m.asize=au.size;
+  const d=segDur(m.segs);if(d)m.dur=d;
+  if(!db){const old=mem.find(o=>o.id===x.id);mem=mem.filter(o=>o.id!==x.id);mem.push(au?{...m,audio:au}:(old&&old.audio?{...m,audio:old.audio}:m));return r()}   /* mem chỉ dùng khi KHÔNG mở được IndexedDB */
+  try{const wa=!!(withAudio&&au),t=db.transaction(wa?['l','a']:['l'],'readwrite');
+    t.objectStore('l').put(m);if(wa)t.objectStore('a').put({id:x.id,audio:au});
+    t.oncomplete=()=>r();t.onerror=t.onabort=()=>{console.error('put',t.error);r()}}catch(e){console.error(e);r()}});
+const del=id=>new Promise(r=>{mem=mem.filter(x=>x.id!==id);if(!db)return r();try{const t=db.transaction(['l','a'],'readwrite');t.objectStore('l').delete(id);t.objectStore('a').delete(id);t.oncomplete=()=>r();t.onerror=t.onabort=()=>r()}catch(e){r()}});
 /* auto split */
 /* chọn điểm cắt: kết hợp khoảng lặng + độ dài chữ của từng câu (quy hoạch động) */
 function pickCuts(cands,lo,hi,ls){
@@ -359,11 +387,10 @@ async function render(){
 }
 $('q').oninput=render;
 /* ===== sao lưu / khôi phục: chọn bài để xuất (1 file hoặc mỗi bài 1 file), nhập nhiều file cùng lúc ===== */
-const b2d=b=>new Promise((res,rej)=>{const f=new FileReader();f.onload=()=>res(f.result);f.onerror=()=>rej(f.error);f.readAsDataURL(b)});
 const bkSel=new Set();let bkAllL=[];
 const natC=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'});
 const mb=n=>n>=1048576?(n/1048576).toFixed(n>=1.05e8?0:1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
-const lsize=l=>(l.audio&&l.audio.size)||0;
+const lsize=l=>l.asize||0;
 const fname=s=>(s||'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,'_').replace(/\s+/g,' ').trim().slice(0,70);
 const itemName=l=>fname((l.book?l.book+' - ':'')+(l.sub?l.sub+' - ':'')+l.title)||'bai';
 const bkMsg=t=>{$('bkMsg').textContent=t};
@@ -378,7 +405,7 @@ function drawBk(){
   $('bkList').innerHTML=ks.length?ks.map(k=>{
     const it=g[k].slice().sort((a,b)=>natC(a.sub||'',b.sub||'')||natC(a.title,b.title));
     return `<div class="bkg"><label class="bkh"><input type="checkbox" data-g="1"><span class="t">${esc(k)}</span><span class="mu">${it.length} bài</span></label>`
-      +it.map(l=>`<label class="bki"><input type="checkbox" data-id="${l.id}"${bkSel.has(l.id)?' checked':''}><span class="t">${l.sub?esc(l.sub)+' › ':''}${esc(l.title)}</span><span class="mu">${mb(lsize(l))}</span></label>`).join('')+'</div>'}).join('')
+      +it.map(l=>`<label class="bki"><input type="checkbox" data-id="${l.id}"${bkSel.has(l.id)?' checked':''}><span class="t">${l.sub?esc(l.sub)+' › ':''}${esc(l.title)}</span><span class="mu">${l.dur?fmtDur(l.dur)+' · ':''}${mb(lsize(l))}</span></label>`).join('')+'</div>'}).join('')
     :'<p class="mu" style="margin:8px 4px">'+(bkAllL.length?'Không có bài nào khớp.':'Chưa có bài nào để sao lưu.')+'</p>';
   updBk()}
 function updBk(){
@@ -394,22 +421,36 @@ $('bkList').onchange=e=>{const t=e.target;
   updBk()};
 $('bkAll').onclick=()=>{document.querySelectorAll('#bkList input[data-id]').forEach(x=>{x.checked=true;bkSel.add(+x.dataset.id)});updBk()};
 $('bkNone').onclick=()=>{bkSel.clear();document.querySelectorAll('#bkList input[type=checkbox]').forEach(x=>x.checked=false);updBk()};
+/* JSZip nạp từ CDN khi cần (lần đầu bấm xuất/nhập). crossorigin để chạy được dưới COEP của coi-serviceworker */
+let zipP=null;
+const loadZip=()=>window.JSZip?Promise.resolve(window.JSZip):(zipP=zipP||new Promise((res,rej)=>{
+  const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';sc.crossOrigin='anonymous';
+  sc.onload=()=>window.JSZip?res(window.JSZip):(zipP=null,rej(new Error('JSZip không khởi tạo được')));
+  sc.onerror=()=>{zipP=null;rej(new Error('không tải được thư viện JSZip (cần có mạng)'))};
+  document.head.appendChild(sc)}));
+const AEXT={'audio/mpeg':'mp3','audio/mp3':'mp3','audio/wav':'wav','audio/x-wav':'wav','audio/wave':'wav','audio/vnd.wave':'wav','audio/mp4':'m4a','audio/x-m4a':'m4a','audio/aac':'aac','audio/ogg':'ogg','audio/webm':'webm','audio/flac':'flac','audio/opus':'opus'};
+const EXTM={mp3:'audio/mpeg',wav:'audio/wav',m4a:'audio/mp4',aac:'audio/aac',ogg:'audio/ogg',opus:'audio/ogg',webm:'audio/webm',flac:'audio/flac'};
+const aext=b=>AEXT[(b.type||'').split(';')[0].toLowerCase()]||'bin';
+/* file zip: data.json (chỉ text/script/mốc, mỗi bài có audioFile trỏ tới file nhị phân) + thư mục audio/<id>.<mp3|wav|…> */
 async function packItems(items,say){
-  const parts=['{"app":"diktat","v":1,"items":['];
+  const JSZip=await loadZip(),zip=new JSZip(),out=[];
   for(let i=0;i<items.length;i++){if(say)say(i+1,items.length);
-    const o={};for(const k in items[i]){const v=items[i][k];o[k]=v instanceof Blob?{__blob:await b2d(v)}:v}
-    parts.push((i?',':'')+JSON.stringify(o));await new Promise(r=>setTimeout(r,0))}
-  parts.push(']}');return new Blob(parts,{type:'application/json'})}
+    const m={...items[i]};delete m.audio;
+    const au=await getAudio(m.id);
+    if(au){const f=`audio/${m.id}.${aext(au)}`;zip.file(f,au,{binary:true,compression:'STORE'});m.audioFile=f}   /* audio đã nén sẵn (mp3/m4a) hoặc WAV: lưu nguyên, khỏi tốn CPU */
+    out.push(m);await new Promise(r=>setTimeout(r,0))}
+  zip.file('data.json',JSON.stringify({app:'diktat',v:2,items:out}),{compression:'DEFLATE'});
+  return zip.generateAsync({type:'blob',compression:'STORE',streamFiles:true},md=>bkMsg(`Đang tạo file zip… ${Math.round(md.percent)}%`))}
 function saveBlob(blob,name){const a=document.createElement('a'),u=URL.createObjectURL(blob);
   a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),15000)}
 const today=()=>new Date().toISOString().slice(0,10);
 const getSel=()=>bkAllL.filter(l=>bkSel.has(l.id));
 $('bkOutSel').onclick=async()=>{const sel=getSel();if(!sel.length)return;
   const tot=sel.reduce((a,l)=>a+lsize(l),0);
-  if(tot>4e8&&!confirm(`Tổng khoảng ${mb(tot)} – gộp 1 file có thể làm trình duyệt hết bộ nhớ. Nên dùng "Mỗi bài 1 file". Vẫn xuất gộp?`))return;
+  if(tot>3e8&&!confirm(`Tổng khoảng ${mb(tot)} – JSZip phải dựng cả file zip trong bộ nhớ nên gộp 1 file có thể làm trình duyệt hết RAM. Nên dùng "Mỗi bài 1 file". Vẫn xuất gộp?`))return;
   $('bkOutSel').disabled=$('bkOutEach').disabled=true;
   try{const blob=await packItems(sel,(i,n)=>bkMsg(`Đang đóng gói ${i}/${n}…`));
-    saveBlob(blob,sel.length===1?`diktat-${itemName(sel[0])}.json`:`diktat-backup-${today()}-${sel.length}bai.json`);
+    saveBlob(blob,sel.length===1?`diktat-${itemName(sel[0])}.zip`:`diktat-backup-${today()}-${sel.length}bai.zip`);
     bkMark(sel.map(l=>l.id));bkMsg(`Đã xuất ${sel.length} bài ✓ – hãy cất file này ở nơi an toàn.`)}
   catch(e){console.error(e);bkMsg('Lỗi khi xuất: '+(e&&e.message||e))}
   updBk()};
@@ -417,7 +458,7 @@ $('bkOutEach').onclick=async()=>{const sel=getSel();if(!sel.length)return;
   $('bkOutSel').disabled=$('bkOutEach').disabled=true;
   try{const w=String(sel.length).length;
     for(let i=0;i<sel.length;i++){bkMsg(`Đang xuất ${i+1}/${sel.length}: ${sel[i].title}…`);
-      saveBlob(await packItems([sel[i]]),`diktat-${String(i+1).padStart(w,'0')}-${itemName(sel[i])}.json`);
+      saveBlob(await packItems([sel[i]]),`diktat-${String(i+1).padStart(w,'0')}-${itemName(sel[i])}.zip`);
       await new Promise(r=>setTimeout(r,450))}
     bkMark(sel.map(l=>l.id));
     bkMsg(`Đã xuất ${sel.length} file ✓ (nếu trình duyệt hỏi "tải nhiều file" thì chọn Cho phép).`)}
@@ -427,13 +468,26 @@ $('bkIn').onclick=()=>$('bkFile').click();
 $('bkFile').onchange=async e=>{const fs=[...e.target.files];e.target.value='';if(!fs.length)return;
   let n=0;const bad=[];
   for(let fi=0;fi<fs.length;fi++){const f=fs[fi];
-    try{bkMsg(`Đang đọc file ${fi+1}/${fs.length}: ${f.name}…`);const j=JSON.parse(await f.text());
-      if(!j||j.app!=='diktat'||!Array.isArray(j.items))throw new Error('không phải file sao lưu của trang này');
-      for(const o of j.items){
-        for(const k in o){const v=o[k];if(v&&typeof v==='object'&&typeof v.__blob==='string')o[k]=await (await fetch(v.__blob)).blob()}
-        if(o.id==null)continue;await put(o);bkMark([o.id]);n++;bkMsg(`Đang nhập… ${n} bài (file ${fi+1}/${fs.length})`)}}
+    try{bkMsg(`Đang đọc file ${fi+1}/${fs.length}: ${f.name}…`);
+      if((await f.slice(0,2).text())==='PK'){   /* ===== file .zip mới: data.json + audio/ ===== */
+        const JSZip=await loadZip(),zip=await JSZip.loadAsync(f),dj=zip.file('data.json');
+        if(!dj)throw new Error('thiếu data.json trong file zip');
+        const j=JSON.parse(await dj.async('string'));
+        if(!j||j.app!=='diktat'||!Array.isArray(j.items))throw new Error('không phải file sao lưu của trang này');
+        for(const o of j.items){if(o.id==null)continue;
+          const af=o.audioFile;delete o.audioFile;const ent=af&&zip.file(af);
+          if(!ent){bad.push(`${f.name}: bài "${o.title||o.id}" thiếu file audio`);continue}
+          const raw=await ent.async('blob'),ext=((af.match(/\.(\w+)$/)||[])[1]||'').toLowerCase();
+          o.audio=raw.slice(0,raw.size,EXTM[ext]||'');   /* gắn lại kiểu MIME theo đuôi file */
+          await put(o,true);o.audio=null;bkMark([o.id]);n++;bkMsg(`Đang nhập… ${n} bài (file ${fi+1}/${fs.length})`)}}
+      else{   /* ===== file .json kiểu cũ (audio dạng base64) – vẫn nhập được ===== */
+        const j=JSON.parse(await f.text());
+        if(!j||j.app!=='diktat'||!Array.isArray(j.items))throw new Error('không phải file sao lưu của trang này');
+        for(const o of j.items){
+          for(const k in o){const v=o[k];if(v&&typeof v==='object'&&typeof v.__blob==='string')o[k]=await (await fetch(v.__blob)).blob()}
+          if(o.id==null)continue;await put(o,true);o.audio=null;bkMark([o.id]);n++;bkMsg(`Đang nhập… ${n} bài (file ${fi+1}/${fs.length})`)}}}
     catch(err){console.error(err);bad.push(f.name+': '+(err&&err.message||err))}}
-  bkMsg(`Đã nhập ${n} bài ✓ (bài trùng mã sẽ được ghi đè).`+(bad.length?` Lỗi ${bad.length} file – ${bad.join('; ')}`:''));
+  bkMsg(`Đã nhập ${n} bài ✓ (bài trùng mã sẽ được ghi đè).`+(bad.length?` Lỗi ${bad.length} mục – ${bad.join('; ')}`:''));
   render();renderBk()};
 /* ===== nhắc sao lưu: nhớ bài nào đã xuất/nhập, cảnh báo bài chưa sao lưu ===== */
 const BK_KEY='diktatBk';
@@ -468,7 +522,7 @@ $('list').onclick=async e=>{
     if(acc.classList.contains('open')){openB.delete(k);if(!q){delete subSel[k];subOff.delete(k)}acc.classList.remove('open')}   /* đang mở => bấm 1 lần là thu gọn hết (cả nhóm nhỏ lẫn bài) */
     else{if(!q)reset();openB.add(k);acc.classList.add('open')}         /* mở: luôn bắt đầu với chỉ ô nhóm */
   }
-  if(pl){cur=(await all()).find(x=>x.id==pl.dataset.id);$('mt').textContent=(cur.book?cur.book+' - ':'')+cur.title;show('vMode')}
+  if(pl){cur=await get(pl.dataset.id);if(!cur)return;$('mt').textContent=(cur.book?cur.book+' - ':'')+cur.title;show('vMode')}
 };
 const head=()=>(cur.book?cur.book+' - ':'')+cur.title;
 async function ensureSegs(){const n=getLines(cur.script).length;if(!cur.segs||cur.segs.length!==n){cur.segs=await detect(cur.audio,n,getLines(cur.script));await put(cur)}}
@@ -540,7 +594,7 @@ $('save').onclick=async()=>{
     let blob=pendBlob||pend[0].file;
     if(!pendBlob&&pend.length>1)blob=await mergeAudio(pend.map(x=>x.file),m=>{$('msg').textContent=m});
     const ls=getLines(script),[sg,note,wd,cn]=await smartSplit(blob,ls,m=>{$('msg').textContent=m},$('wchk').checked||!!pendWords,pendWords);
-    await put({id:Date.now(),title,book,sub,script,trans,audio:blob,segs:sg,words:wd||null,wmodel:wd?wkey():'',wver:3,conf:cn||null});
+    await put({id:Date.now(),title,book,sub,script,trans,audio:blob,segs:sg,words:wd||null,wmodel:wd?wkey():'',wver:3,conf:cn||null},true);
     const n=pend.length;
     $('title').value=$('script').value=$('trans').value=$('file').value='';pend=[];pendBlob=pendWords=null;$('fsum').textContent='';
     $('msg').textContent=`Đã lưu 1 bài${n>1?` (gộp từ ${n} file audio)`:''} ✓ – vào bài và chọn "Chỉnh mốc" để kiểm tra các câu. `+(note||'');
@@ -944,7 +998,7 @@ $('tapadd').onclick=async()=>{
   $('msg').textContent='';
   const ls=getLines(script),n=pend.length;
   tapStart(ls,blob,{msg:'msg',btns,done:async sg=>{
-    try{await put({id:Date.now(),title,book,sub,script,trans,audio:blob,segs:sg,words:null,wmodel:'',wver:3,conf:null});
+    try{await put({id:Date.now(),title,book,sub,script,trans,audio:blob,segs:sg,words:null,wmodel:'',wver:3,conf:null},true);
       $('title').value=$('script').value=$('trans').value=$('file').value='';pend=[];pendBlob=pendWords=null;$('fsum').textContent='';
       $('msg').textContent=`Đã lưu 1 bài${n>1?` (gộp từ ${n} file audio)`:''} ✓ – vào bài và chọn "Chỉnh mốc" nếu muốn kiểm tra lại các câu.`;render()}
     catch(e){console.error(e);$('msg').textContent='Lỗi khi lưu: '+(e&&e.message||e)}}})};
