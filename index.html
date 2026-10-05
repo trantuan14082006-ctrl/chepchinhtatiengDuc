@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <script src="coi-serviceworker.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>/* áp dụng giao diện tối ngay từ đầu (trước khi vẽ trang) để không bị nháy màu sáng */
+try{if(localStorage.getItem('diktatTheme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}</script>
 <title>Diktat Dashboard</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M6 20A14 14 0 0 1 20 6H44A14 14 0 0 1 58 20V54A4 4 0 0 1 54 58H10A4 4 0 0 1 6 54Z' fill='none' stroke='%23f5b301' stroke-width='8' stroke-linejoin='round'/%3E%3Cpath d='M23 21H31A11 11 0 0 1 31 43H23Z' fill='none' stroke='%23f5b301' stroke-width='5' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
@@ -96,11 +98,23 @@ html{scroll-behavior:smooth}
 .card label.bkh{font-weight:700;margin-top:6px}.card label.bki{padding-left:30px}.card label.bkh:hover,.card label.bki:hover{background:var(--g)}
 .bki .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bkh .mu,.bki .mu{margin-left:auto;white-space:nowrap;font-weight:400}
 .wv{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:10px;max-height:260px;overflow:auto;white-space:pre-wrap;font:13px/1.5 ui-monospace,Consolas,monospace;margin:10px 0}
+/* ===== Nút bật/tắt giao diện tối ===== */
+.tg{width:42px;height:42px;border-radius:50%;border:2px solid var(--bd);background:var(--g);color:var(--tx);font-size:19px;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0;margin-left:6px;transition:border-color .2s,background-color .2s,transform .2s}
+.tg:hover{border-color:var(--yl);transform:rotate(-12deg) scale(1.06)}.tg:active{transform:scale(.92)}
+/* ===== Giao diện tối: chỉ đổi bộ biến màu, các thành phần còn lại tự theo ===== */
+:root[data-theme=dark]{color-scheme:dark;
+--bg:#16181d;--g:#22262d;--gr:#d4a017;--tx:#e8eaee;--mu:#98a1ad;--bd:#383e48;--sel:#4a3d12;--bad:#ff8272;--sh:0 2px 12px rgba(0,0,0,.55);--yl:#e0ac1a;--yl2:#3a3110}
+:root[data-theme=dark] .ov .bd .g{color:#4fd18c}
+:root[data-theme=dark] .rcard{border:1px solid var(--bd)}
+:root[data-theme=dark] .box{border-color:var(--bd)}
+/* các nút vốn ép chữ đen (cho nền sáng) => trên nền tối đổi sang chữ sáng; nút vàng vẫn giữ chữ đen */
+:root[data-theme=dark] .sm,:root[data-theme=dark] .sm.on,:root[data-theme=dark] .b1,:root[data-theme=dark] .ed,:root[data-theme=dark] .nav2 button,:root[data-theme=dark] .tl .l button,:root[data-theme=dark] .sbtn,:root[data-theme=dark] .btn{color:var(--tx)!important}
+:root[data-theme=dark] .b2,:root[data-theme=dark] .sbtn.p{color:#14181f!important}
 </style>
 </head>
 <body>
 <header class="hd"><div class="logo"><b>D</b>Diktat Dashboard</div>
-<nav><a id="nHome" class="act">Bài học</a><a id="nAdd">Thêm bài</a><a id="nBk">Sao lưu</a></nav></header>
+<nav><a id="nHome" class="act">Bài học</a><a id="nAdd">Thêm bài</a><a id="nBk">Sao lưu</a><button type="button" class="tg" id="theme" aria-label="Chuyển giao diện sáng/tối">🌙</button></nav></header>
 <main>
 
 <div id="vHome">
@@ -370,6 +384,11 @@ window.addEventListener('popstate',()=>{fromPop=true;render();show('vHome');from
 $('nHome').onclick=()=>{render();show('vHome')};document.querySelector('.logo').onclick=()=>{collapseAll();render();show('vHome')};/* rời trang Bài học sang Thêm bài / Sao lưu => thu gọn hết, quay lại chỉ thấy tên đầu mục */
 const collapseAll=()=>{openB.clear();subOff.clear();for(const k in subSel)delete subSel[k]};
 $('nAdd').onclick=()=>{collapseAll();show('vAdd')};$('nBk').onclick=()=>{collapseAll();renderBk();show('vBk')};
+/* giao diện sáng/tối: nhớ lựa chọn trong localStorage (khoá 'diktatTheme'); script ở <head> đã áp dụng sẵn khi tải trang */
+function applyTheme(dark){document.documentElement.dataset.theme=dark?'dark':'light';const b=$('theme');
+  b.textContent=dark?'☀️':'🌙';b.title=dark?'Chuyển sang giao diện sáng':'Chuyển sang giao diện tối';b.setAttribute('aria-pressed',String(dark))}
+applyTheme(document.documentElement.dataset.theme==='dark');
+$('theme').onclick=()=>{const d=document.documentElement.dataset.theme!=='dark';applyTheme(d);try{localStorage.setItem('diktatTheme',d?'dark':'light')}catch(e){}};
 /* home */
 let fxPl=false;const openB=new Set(),subSel={},subOff=new Set();/* subSel: sách -> nhóm nhỏ đang chọn; subOff: sách đang thu gọn khung bài */
 async function render(){
