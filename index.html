@@ -200,7 +200,9 @@ async function load(model,device){
   asr=await pipeline('automatic-speech-recognition',model,opt);
   curModel=model;curDev=device;
 }
-const OPT={language:'german',task:'transcribe',return_timestamps:'word',chunk_length_s:30,stride_length_s:5};
+const OPT={language:'german',task:'transcribe',return_timestamps:'word',chunk_length_s:30,stride_length_s:5,
+  /* gợi ý từ vựng cho Whisper: thay bằng tên riêng / cụm từ khó trong giáo trình của bạn */
+  initial_prompt:'Hallo! Das ist ein Beispieltext auf Deutsch. Wie geht es dir heute? E-Mail, Smartphone, München, Berlin.'};
 async function handle(d){
   if(d.type==='preload'){
     try{await load(d.model,d.gpu?'webgpu':'wasm');send({type:'preloaded'})}catch(err){send({type:'perr'})}
@@ -602,7 +604,7 @@ $('save').onclick=async()=>{
   btn.disabled=false;render();
 };
 /* ===== Whisper: nhận diện giọng nói trong trình duyệt rồi đối chiếu với script ===== */
-const WM={tiny:'Xenova/whisper-tiny',base:'Xenova/whisper-base',small:'Xenova/whisper-small'};
+const WM={tiny:'onnx-community/whisper-tiny',base:'onnx-community/whisper-base',small:'onnx-community/whisper-small'};
 let asr=null,asrKey='';
 let gpuOK=!!navigator.gpu,gpuP=null;
 /* navigator.gpu có chưa chắc máy có GPU dùng được => hỏi adapter thật */
