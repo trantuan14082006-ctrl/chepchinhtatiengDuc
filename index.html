@@ -31,7 +31,7 @@ h3{font-size:22px;margin:0 0 18px}
 .acc{margin-bottom:18px}.ah{background:var(--g);border-radius:18px;padding:22px 30px;font-size:24px;display:flex;justify-content:space-between;cursor:pointer;border:1px solid transparent}
 .acc.open .ah{border-color:var(--gr)}.ah span{transition:.2s}.acc.open .ah span{transform:rotate(180deg)}
 .nm{flex:1;font-style:normal}.ed{font-size:18px;font-weight:400;margin:0 18px;color:var(--tx);padding:0 6px}.ed:hover{background:var(--sel);border-radius:6px}
-.abw{display:grid;grid-template-rows:0fr;transition:grid-template-rows .38s cubic-bezier(.2,.7,.2,1)}.acc.open .abw{grid-template-rows:1fr}.ab{overflow:hidden;min-height:0;visibility:hidden;transition:visibility 0s .38s}.acc.open .ab{visibility:visible;transition-delay:0s}.abi{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;padding:14px 6px 2px 0}.subs{display:flex;flex-direction:column;gap:12px;width:250px;flex:none}.sub{background:var(--g);border-radius:16px;padding:16px 30px;cursor:pointer;border:1px solid transparent;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sub:hover,.sub.on{border-color:var(--gr)}.pl{flex:1;min-width:240px}.pl .pill{max-width:380px;white-space:normal}
+.abw{display:grid;grid-template-rows:0fr;transition:grid-template-rows .38s cubic-bezier(.2,.7,.2,1)}.acc.open .abw{grid-template-rows:1fr}.ab{overflow:hidden;min-height:0;visibility:hidden;transition:visibility 0s .38s}.acc.open .ab{visibility:visible;transition-delay:0s}.abi{display:flex;flex-direction:column;gap:12px;padding:14px 6px 2px 0}.srow{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}.sub{width:250px;max-width:100%;flex:none;background:var(--g);border-radius:16px;padding:16px 30px;cursor:pointer;border:1px solid transparent;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sub:hover,.sub.on{border-color:var(--gr)}.pl{flex:1;min-width:240px}.pl .pill{max-width:380px;white-space:normal}
 .pill,.mode{background:var(--g);border-radius:16px;padding:16px 30px;margin-bottom:12px;cursor:pointer;border:1px solid transparent;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill small{display:block;color:var(--mu);font-size:12px}
 .mode{max-width:690px;font-size:20px;padding:18px 30px}.pill:hover,.mode:hover{border-color:var(--gr)}
@@ -71,7 +71,7 @@ h3{font-size:22px;margin:0 0 18px}
 .seg.warn{background:var(--yl2);border-radius:8px;padding:3px 4px}.seg .tt{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .wmsel{padding:9px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:14px system-ui;max-width:100%}
 .mu{color:var(--mu);font-size:14px}.hide{display:none!important}.big{font-size:34px;font-weight:700}
-@media(max-width:700px){.subs{width:100%;flex-direction:row;flex-wrap:wrap}.sub{max-width:100%}main{padding:6px 16px 60px}.hd{padding:10px 16px}.ah{padding:16px 20px;font-size:20px}.btn{width:46%}}
+@media(max-width:700px){.sub{max-width:100%}main{padding:6px 16px 60px}.hd{padding:10px 16px}.ah{padding:16px 20px;font-size:20px}.btn{width:46%}}
 
 /* hiệu ứng chuyển nhẹ */
 @keyframes vin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
@@ -402,9 +402,11 @@ async function render(){
     const sb={};g[k].forEach(l=>{const n=l.sub||k;(sb[n]=sb[n]||[]).push(l)});
     const nat=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'});
     const sk=Object.keys(sb).sort(nat),sel=subOff.has(k)&&!q?null:(sb[subSel[k]]?subSel[k]:(q?sk[0]:null));
-    return `<div class="acc ${openB.has(k)||q?'open':''}"><div class="ah" data-k="${esc(k)}"><em class="nm">${esc(k)}</em><b class="ed" data-k="${esc(k)}" title="Đổi tên học phần">✎ Đổi tên</b><span>⌄</span></div><div class="abw"><div class="ab"><div class="abi"><div class="subs">`
-      +sk.map(n=>`<div class="sub${n===sel?' on':''}" data-b="${esc(k)}" data-s="${esc(n)}">${esc(n)}</div>`).join('')
-      +'</div><div class="pl'+(fx0?' go':'')+'">'+(sel?sb[sel].slice().sort((a,b)=>nat(a.title,b.title)).map(l=>`<div class="pill" data-id="${l.id}">${esc(l.title)}</div>`).join(''):'')+'</div></div></div></div></div>'}).join('');
+    return `<div class="acc ${openB.has(k)||q?'open':''}"><div class="ah" data-k="${esc(k)}"><em class="nm">${esc(k)}</em><b class="ed" data-k="${esc(k)}" title="Đổi tên học phần">✎ Đổi tên</b><span>⌄</span></div><div class="abw"><div class="ab"><div class="abi">`
+      /* mỗi nhóm nhỏ là 1 hàng; nhóm đang chọn hiện danh sách bài ngay bên phải, các nhóm khác nằm tiếp bên dưới */
+      +sk.map(n=>`<div class="srow"><div class="sub${n===sel?' on':''}" data-b="${esc(k)}" data-s="${esc(n)}">${esc(n)}</div>`
+        +(n===sel?'<div class="pl'+(fx0?' go':'')+'">'+sb[sel].slice().sort((a,b)=>nat(a.title,b.title)).map(l=>`<div class="pill" data-id="${l.id}">${esc(l.title)}</div>`).join('')+'</div>':'')+'</div>').join('')
+      +'</div></div></div></div>'}).join('');
 }
 $('q').oninput=render;
 /* ===== sao lưu / khôi phục: chọn bài để xuất (1 file hoặc mỗi bài 1 file), nhập nhiều file cùng lúc ===== */
@@ -539,7 +541,7 @@ $('list').onclick=async e=>{
     fxPl=true;render();return}
   const ah=e.target.closest('.ah'),pl=e.target.closest('.pill');
   if(ah){const k=ah.dataset.k,acc=ah.parentNode,q=$('q').value.trim(),on=acc.querySelector('.sub.on');
-    const reset=()=>{delete subSel[k];subOff.delete(k);const o=acc.querySelector('.sub.on');if(o)o.classList.remove('on');const pl=acc.querySelector('.pl');if(pl)pl.innerHTML=''};
+    const reset=()=>{delete subSel[k];subOff.delete(k);const o=acc.querySelector('.sub.on');if(o)o.classList.remove('on');const pl=acc.querySelector('.pl');if(pl)pl.remove()};
     if(acc.classList.contains('open')){openB.delete(k);if(!q){delete subSel[k];subOff.delete(k)}acc.classList.remove('open')}   /* đang mở => bấm 1 lần là thu gọn hết (cả nhóm nhỏ lẫn bài) */
     else{if(!q)reset();openB.add(k);acc.classList.add('open')}         /* mở: luôn bắt đầu với chỉ ô nhóm */
   }
